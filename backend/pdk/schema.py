@@ -13,6 +13,7 @@ class RuleType(str, Enum):
     min_extension = "min_extension"
     exact_size = "exact_size"  # for fixed-size vias
     off_grid = "off_grid"
+    min_density = "min_density"
 
 
 class GDSLayer(BaseModel):
@@ -87,9 +88,7 @@ class PDKConfig(BaseModel):
 
     def get_rules_for_layer(self, layer_name: str) -> list[DesignRule]:
         """Get all rules that apply to a given layer."""
-        return [
-            r for r in self.rules if r.layer == layer_name or r.related_layer == layer_name
-        ]
+        return [r for r in self.rules if r.layer == layer_name or r.related_layer == layer_name]
 
     def get_rule(self, rule_id: str) -> DesignRule | None:
         """Get a rule by its ID."""

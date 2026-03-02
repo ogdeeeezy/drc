@@ -28,3 +28,27 @@
 - Implement Phase 1 Story 2: GDSII layout manager
 - Implement Phase 1 Story 3: KLayout DRC runner
 - Implement Phase 1 Story 4: Violation parser
+
+---
+
+## Archived: 2026-03-02 | Git: afd7d76
+
+### Removed Section: Session 2
+
+## Session 2: 2026-03-02 — Phase 1 implementation (P1-1, P1-2)
+
+### Done
+- **Project scaffold** — pyproject.toml, venv (Python 3.12), all deps installed (gdstk, klayout, fastapi, pydantic, rtree), Makefile, directory structure, .gitignore
+- **P1-1: PDK config schema + SKY130 config** — Pydantic models (GDSLayer, DesignRule, ConnectivityRule, FixStrategyWeight, PDKConfig), PDKRegistry with caching, SKY130 pdk.json with 22 layers + 51 rules from official SkyWater docs. 30 tests.
+- **P1-2: GDSII layout manager** — LayoutManager (gdstk load/save/flatten/add/remove/replace), geometry_utils (grid snap, bbox, area, distance). 45 tests.
+- **75 unit tests total**, all passing
+
+### Decisions
+- KLayout CLI not installed yet — Python klayout bindings work fine for parsing, CLI needed in P1-3 for batch DRC
+- SKY130 rules sourced from official SkyWater PDK readthedocs + periphery.csv, 5nm manufacturing grid confirmed
+
+### Next
+- P1-3: KLayout DRC runner (install `klayout` CLI, implement subprocess batch execution, temp file management)
+- P1-4: Violation parser (.lyrdb XML → Violation objects, map to PDK rules)
+- Vendor SKY130 DRC deck (`sky130A_mr.drc`) from efabless/mpw_precheck
+- Then Phase 2: Fix suggestion engine

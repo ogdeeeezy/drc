@@ -12,7 +12,6 @@ from backend.core.violation_models import (
     ViolationGeometry,
 )
 from backend.fix.engine import DEFAULT_PRIORITY, FixEngine, FixEngineResult
-from backend.fix.fix_models import FixConfidence
 from backend.pdk.schema import (
     DesignRule,
     FixStrategyWeight,
@@ -31,22 +30,34 @@ def pdk():
         grid_um=0.005,
         layers={
             "met1": GDSLayer(
-                gds_layer=68, gds_datatype=20, description="Metal 1",
-                color="#0000FF", is_routing=True,
+                gds_layer=68,
+                gds_datatype=20,
+                description="Metal 1",
+                color="#0000FF",
+                is_routing=True,
             ),
         },
         rules=[
             DesignRule(
-                rule_id="m1.1", rule_type=RuleType.min_width,
-                layer="met1", value_um=0.140, severity=7,
+                rule_id="m1.1",
+                rule_type=RuleType.min_width,
+                layer="met1",
+                value_um=0.140,
+                severity=7,
             ),
             DesignRule(
-                rule_id="m1.2", rule_type=RuleType.min_spacing,
-                layer="met1", value_um=0.140, severity=6,
+                rule_id="m1.2",
+                rule_type=RuleType.min_spacing,
+                layer="met1",
+                value_um=0.140,
+                severity=6,
             ),
             DesignRule(
-                rule_id="m1.6", rule_type=RuleType.min_area,
-                layer="met1", value_um=0.083, severity=4,
+                rule_id="m1.6",
+                rule_type=RuleType.min_area,
+                layer="met1",
+                value_um=0.083,
+                severity=4,
             ),
         ],
         connectivity=[],
@@ -64,12 +75,16 @@ def spatial_index():
         # A narrow polygon (width violation)
         PolygonInfo(
             points=[(0, 0), (0.10, 0), (0.10, 1.0), (0, 1.0)],
-            gds_layer=68, gds_datatype=20, cell_name="TOP",
+            gds_layer=68,
+            gds_datatype=20,
+            cell_name="TOP",
         ),
         # A small polygon (area violation)
         PolygonInfo(
             points=[(5, 5), (5.20, 5), (5.20, 5.20), (5, 5.20)],
-            gds_layer=68, gds_datatype=20, cell_name="TOP",
+            gds_layer=68,
+            gds_datatype=20,
+            cell_name="TOP",
         ),
     ]
     return SpatialIndex.from_polygons(polys)
@@ -95,8 +110,10 @@ def _make_report():
                     ViolationGeometry(
                         geometry_type=GeometryType.edge_pair,
                         edge_pair=EdgePair(
-                            edge1_start=(0, 0), edge1_end=(0, 1.0),
-                            edge2_start=(0.10, 0), edge2_end=(0.10, 1.0),
+                            edge1_start=(0, 0),
+                            edge1_end=(0, 1.0),
+                            edge2_start=(0.10, 0),
+                            edge2_end=(0.10, 1.0),
                         ),
                     ),
                 ],
@@ -145,7 +162,10 @@ class TestFixEngine:
         engine = FixEngine(pdk, spatial_index)
         # Violation with no matching strategy
         report = DRCReport(
-            description="test", original_file="", generator="", top_cell="TOP",
+            description="test",
+            original_file="",
+            generator="",
+            top_cell="TOP",
             violations=[
                 Violation(
                     category="unknown_rule",
@@ -175,9 +195,7 @@ class TestFixEngine:
 
     def test_empty_report(self, pdk, spatial_index):
         engine = FixEngine(pdk, spatial_index)
-        report = DRCReport(
-            description="clean", original_file="", generator="", top_cell="TOP"
-        )
+        report = DRCReport(description="clean", original_file="", generator="", top_cell="TOP")
         result = engine.suggest_fixes(report)
         assert result.total_suggestions == 0
         assert result.fixable_count == 0
@@ -192,14 +210,21 @@ class TestFixEngine:
     def test_suggest_for_single_violation(self, pdk, spatial_index):
         engine = FixEngine(pdk, spatial_index)
         violation = Violation(
-            category="m1.1", description="width", cell_name="TOP",
-            rule_id="m1.1", rule_type="min_width", severity=7, value_um=0.140,
+            category="m1.1",
+            description="width",
+            cell_name="TOP",
+            rule_id="m1.1",
+            rule_type="min_width",
+            severity=7,
+            value_um=0.140,
             geometries=[
                 ViolationGeometry(
                     geometry_type=GeometryType.edge_pair,
                     edge_pair=EdgePair(
-                        edge1_start=(0, 0), edge1_end=(0, 1.0),
-                        edge2_start=(0.10, 0), edge2_end=(0.10, 1.0),
+                        edge1_start=(0, 0),
+                        edge1_end=(0, 1.0),
+                        edge2_start=(0.10, 0),
+                        edge2_end=(0.10, 1.0),
                     ),
                 ),
             ],

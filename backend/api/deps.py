@@ -13,6 +13,7 @@ def get_job_manager() -> JobManager:
     global _job_manager
     if _job_manager is None:
         import backend.config as cfg
+
         _job_manager = JobManager(jobs_dir=cfg.JOBS_DIR)
     return _job_manager
 

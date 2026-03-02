@@ -52,9 +52,7 @@ class MinAreaFix(FixStrategy):
             target_points = geometry.points
         elif geometry.geometry_type == GeometryType.edge_pair and geometry.edge_pair:
             # Find the polygon at the edge pair location
-            target_points = self._find_polygon_points(
-                geometry.edge_pair.bbox, spatial_index
-            )
+            target_points = self._find_polygon_points(geometry.edge_pair.bbox, spatial_index)
             if target_points is None:
                 return None
         else:
@@ -103,16 +101,14 @@ class MinAreaFix(FixStrategy):
             extend_amount = snap_to_grid(area_deficit / h, grid)
             # Extend toward less-constrained direction
             extend_right, extend_left = self._pick_extension_dir(
-                orig_bbox, spatial_index, "x",
-                target_poly.polygon.gds_layer, extend_amount, grid
+                orig_bbox, spatial_index, "x", target_poly.polygon.gds_layer, extend_amount, grid
             )
             new_points = self._extend_x(original, orig_bbox, extend_left, extend_right, grid)
         else:
             # Taller than wide → extend vertically (along Y)
             extend_amount = snap_to_grid(area_deficit / w, grid)
             extend_up, extend_down = self._pick_extension_dir(
-                orig_bbox, spatial_index, "y",
-                target_poly.polygon.gds_layer, extend_amount, grid
+                orig_bbox, spatial_index, "y", target_poly.polygon.gds_layer, extend_amount, grid
             )
             new_points = self._extend_y(original, orig_bbox, extend_down, extend_up, grid)
 
@@ -131,10 +127,7 @@ class MinAreaFix(FixStrategy):
         return FixSuggestion(
             violation_category=violation.category,
             rule_type=self.rule_type,
-            description=(
-                f"Extend polygon to area {new_area:.4f}um² "
-                f"(min: {min_area:.4f}um²)"
-            ),
+            description=(f"Extend polygon to area {new_area:.4f}um² (min: {min_area:.4f}um²)"),
             deltas=[delta],
             confidence=FixConfidence.high,
             priority=violation.severity,
@@ -147,9 +140,7 @@ class MinAreaFix(FixStrategy):
             return nearby[0].polygon.points
         return None
 
-    def _pick_extension_dir(
-        self, bbox, spatial_index, axis, layer, amount, grid
-    ):
+    def _pick_extension_dir(self, bbox, spatial_index, axis, layer, amount, grid):
         """Pick which direction to extend, preferring the less-constrained side.
 
         Returns (positive_extend, negative_extend).

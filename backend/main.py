@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.deps import get_job_manager
-from backend.api.routes import drc, fix, layout, pdk, upload
+from backend.api.routes import drc, export, fix, layout, pdk, upload
 
 app = FastAPI(
     title="Agentic DRC",
@@ -26,6 +26,7 @@ app.include_router(drc.router, prefix="/api")
 app.include_router(fix.router, prefix="/api")
 app.include_router(layout.router, prefix="/api")
 app.include_router(pdk.router, prefix="/api")
+app.include_router(export.router, prefix="/api")
 
 
 @app.get("/health")
@@ -48,5 +49,6 @@ async def get_job(job_id: str):
         job = manager.get(job_id)
     except KeyError:
         from fastapi import HTTPException
+
         raise HTTPException(404, f"Job '{job_id}' not found")
     return job.to_dict()

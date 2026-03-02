@@ -13,10 +13,10 @@ router = APIRouter(prefix="/jobs", tags=["drc"])
 
 @router.post("/{job_id}/drc")
 async def run_drc(job_id: str, top_cell: str | None = None):
-    """Run DRC on an uploaded GDSII file.
+    """Run DRC on an uploaded or fixed GDSII file.
 
-    This is a synchronous endpoint — blocks until DRC completes.
-    For large files, consider the async worker (Phase 4).
+    Supports re-DRC after fix application — clears fix cache and
+    increments iteration when re-running from fixes_applied status.
     """
     manager = get_job_manager()
     try:
@@ -29,6 +29,16 @@ async def run_drc(job_id: str, top_cell: str | None = None):
 
     if job.status == JobStatus.running_drc:
         raise HTTPException(409, "DRC already running for this job")
+
+    # Clear fix cache on re-run
+    from backend.api.routes.fix import clear_fix_cache
+
+    clear_fix_cache(job_id)
+
+    # Increment iteration on re-DRC after fixes
+    if job.status == JobStatus.fixes_applied:
+        manager.update_status(job_id, JobStatus.running_drc, iteration=job.iteration + 1)
+        job = manager.get(job_id)  # refresh
 
     # Load PDK
     registry = get_pdk_registry()
@@ -45,6 +55,7 @@ async def run_drc(job_id: str, top_cell: str | None = None):
     job_dir = manager.job_dir(job_id)
     try:
         from pathlib import Path
+
         result = runner.run(
             gds_path=Path(job.gds_path),
             pdk=pdk,
@@ -99,6 +110,7 @@ async def get_violations(job_id: str, category: str | None = None):
 
     # Re-parse the report
     from pathlib import Path
+
     from backend.core.violation_parser import ViolationParser
 
     parser = ViolationParser()
@@ -141,7 +153,9 @@ async def get_violations(job_id: str, category: str | None = None):
                         "edge_pair": {
                             "edge1": [list(g.edge_pair.edge1_start), list(g.edge_pair.edge1_end)],
                             "edge2": [list(g.edge_pair.edge2_start), list(g.edge_pair.edge2_end)],
-                        } if g.edge_pair else None,
+                        }
+                        if g.edge_pair
+                        else None,
                         "points": g.points,
                     }
                     for g in v.geometries

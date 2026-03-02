@@ -115,9 +115,7 @@ class MinSpacingFix(FixStrategy):
 
         return poly1, poly2
 
-    def _suggest_move_fix(
-        self, violation, poly1, poly2, deficit, is_horizontal_gap, grid, pdk
-    ):
+    def _suggest_move_fix(self, violation, poly1, poly2, deficit, is_horizontal_gap, grid, pdk):
         """Move the smaller polygon away by the full deficit."""
         # Move the polygon with smaller area (less connected, easier to move)
         from backend.core.geometry_utils import polygon_area
@@ -127,10 +125,10 @@ class MinSpacingFix(FixStrategy):
 
         if area1 <= area2:
             to_move, stationary = poly1, poly2
-            direction = -1  # move poly1 away from poly2
+            _ = -1  # poly1 moves away from poly2
         else:
             to_move, stationary = poly2, poly1
-            direction = 1  # move poly2 away from poly1
+            _ = 1  # poly2 moves away from poly1
 
         # Determine which direction to move
         move_bbox = polygon_bbox(to_move.polygon.points)
@@ -179,9 +177,7 @@ class MinSpacingFix(FixStrategy):
             priority=violation.severity,
         )
 
-    def _suggest_shrink_fix(
-        self, violation, poly1, poly2, deficit, is_horizontal_gap, grid, pdk
-    ):
+    def _suggest_shrink_fix(self, violation, poly1, poly2, deficit, is_horizontal_gap, grid, pdk):
         """Shrink both polygons by deficit/2 each."""
         half = snap_to_grid(deficit / 2, grid)
         # Ensure we cover the full deficit even after grid snapping

@@ -10,6 +10,7 @@ export interface JobSummary {
   created_at: number;
   total_violations: number;
   error: string | null;
+  iteration: number;
 }
 
 export interface UploadResult {
@@ -116,6 +117,27 @@ export interface PreviewResult {
   deltas: FixDelta[];
 }
 
+export interface ApplyResult {
+  job_id: string;
+  applied_count: number;
+  total_requested: number;
+  fixed_gds_path: string;
+  iteration: number;
+  status: string;
+}
+
+export interface RecheckResult {
+  job_id: string;
+  applied_count: number;
+  iteration: number;
+  status: string;
+  total_violations: number;
+  previous_violations: number;
+  duration_seconds: number;
+  is_clean: boolean;
+  categories: { category: string; description: string; count: number }[];
+}
+
 async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) {
@@ -163,15 +185,24 @@ export const api = {
     return fetchJSON(`${BASE}/jobs/${jobId}/fix/preview/${index}`);
   },
 
-  applyFixes(
-    jobId: string,
-    indices: number[]
-  ): Promise<{ applied_count: number; status: string }> {
+  applyFixes(jobId: string, indices: number[]): Promise<ApplyResult> {
     return fetchJSON(`${BASE}/jobs/${jobId}/fix/apply`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ suggestion_indices: indices }),
     });
+  },
+
+  applyAndRecheck(jobId: string, indices: number[]): Promise<RecheckResult> {
+    return fetchJSON(`${BASE}/jobs/${jobId}/fix/apply-and-recheck`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ suggestion_indices: indices }),
+    });
+  },
+
+  downloadReport(jobId: string, format: "json" | "csv" | "html"): string {
+    return `${BASE}/jobs/${jobId}/report/${format}`;
   },
 
   listPDKs(): Promise<{ pdks: string[] }> {

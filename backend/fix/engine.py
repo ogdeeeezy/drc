@@ -13,6 +13,7 @@ from backend.fix.clustering import ViolationCluster, cluster_violations
 from backend.fix.fix_models import FixSuggestion
 from backend.fix.strategies.area import MinAreaFix
 from backend.fix.strategies.base import FixStrategy
+from backend.fix.strategies.density import DensityFillFix
 from backend.fix.strategies.enclosure import EnclosureFix
 from backend.fix.strategies.offgrid import OffGridFix
 from backend.fix.strategies.short import ShortCircuitFix
@@ -20,7 +21,6 @@ from backend.fix.strategies.spacing import MinSpacingFix
 from backend.fix.strategies.width import MinWidthFix
 from backend.fix.validator import FixValidator
 from backend.pdk.schema import PDKConfig
-
 
 # Default priority order (1 = highest)
 DEFAULT_PRIORITY = {
@@ -30,6 +30,7 @@ DEFAULT_PRIORITY = {
     "min_spacing": 4,
     "min_enclosure": 5,
     "min_area": 6,
+    "min_density": 7,
 }
 
 
@@ -86,6 +87,7 @@ class FixEngine:
             MinSpacingFix(),
             EnclosureFix(),
             MinAreaFix(),
+            DensityFillFix(),
         ]
 
     def suggest_fixes(
@@ -107,9 +109,7 @@ class FixEngine:
         result = FixEngineResult()
 
         # Cluster violations for context
-        result.clusters = cluster_violations(
-            report.violations, proximity_um=cluster_proximity_um
-        )
+        result.clusters = cluster_violations(report.violations, proximity_um=cluster_proximity_um)
 
         # Process each violation
         for violation in report.violations:

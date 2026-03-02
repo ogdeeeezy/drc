@@ -10,9 +10,7 @@ def snap_to_grid(value: float, grid: float = 0.005) -> float:
     return round(value / grid) * grid
 
 
-def snap_point_to_grid(
-    x: float, y: float, grid: float = 0.005
-) -> tuple[float, float]:
+def snap_point_to_grid(x: float, y: float, grid: float = 0.005) -> tuple[float, float]:
     """Snap a point (x, y) to the nearest grid point."""
     return (snap_to_grid(x, grid), snap_to_grid(y, grid))
 
@@ -59,9 +57,7 @@ def bboxes_overlap(
     return a[0] <= b[2] and a[2] >= b[0] and a[1] <= b[3] and a[3] >= b[1]
 
 
-def point_distance(
-    p1: tuple[float, float], p2: tuple[float, float]
-) -> float:
+def point_distance(p1: tuple[float, float], p2: tuple[float, float]) -> float:
     """Euclidean distance between two points."""
     return math.sqrt((p2[0] - p1[0]) ** 2 + (p2[1] - p1[1]) ** 2)
 

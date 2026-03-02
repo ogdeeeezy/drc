@@ -19,9 +19,7 @@ class PDKRegistry:
         if not self._configs_dir.exists():
             return []
         return sorted(
-            d.name
-            for d in self._configs_dir.iterdir()
-            if d.is_dir() and (d / "pdk.json").exists()
+            d.name for d in self._configs_dir.iterdir() if d.is_dir() and (d / "pdk.json").exists()
         )
 
     def load(self, pdk_name: str) -> PDKConfig:
@@ -33,8 +31,7 @@ class PDKRegistry:
         if not config_path.exists():
             available = self.list_pdks()
             raise FileNotFoundError(
-                f"PDK '{pdk_name}' not found at {config_path}. "
-                f"Available PDKs: {available}"
+                f"PDK '{pdk_name}' not found at {config_path}. Available PDKs: {available}"
             )
 
         with open(config_path) as f:

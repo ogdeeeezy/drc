@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import gdstk
@@ -205,9 +205,7 @@ class LayoutManager:
         cell = self.get_cell(cell_name)
         cell.add(gdstk.Polygon(points, layer=layer, datatype=datatype))
 
-    def remove_polygon(
-        self, cell_name: str, polygon_index: int
-    ) -> None:
+    def remove_polygon(self, cell_name: str, polygon_index: int) -> None:
         """Remove a polygon from a cell by index."""
         cell = self.get_cell(cell_name)
         if polygon_index < 0 or polygon_index >= len(cell.polygons):
@@ -226,12 +224,8 @@ class LayoutManager:
         """Replace a polygon's geometry (same layer/datatype, new points)."""
         cell = self.get_cell(cell_name)
         if polygon_index < 0 or polygon_index >= len(cell.polygons):
-            raise IndexError(
-                f"Polygon index {polygon_index} out of range for cell '{cell_name}'"
-            )
+            raise IndexError(f"Polygon index {polygon_index} out of range for cell '{cell_name}'")
         old_poly = cell.polygons[polygon_index]
-        new_poly = gdstk.Polygon(
-            new_points, layer=old_poly.layer, datatype=old_poly.datatype
-        )
+        new_poly = gdstk.Polygon(new_points, layer=old_poly.layer, datatype=old_poly.datatype)
         cell.remove(old_poly)
         cell.add(new_poly)

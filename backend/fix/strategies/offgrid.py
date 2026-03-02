@@ -9,7 +9,6 @@ from backend.core.geometry_utils import (
     bbox_height,
     bbox_width,
     polygon_bbox,
-    snap_to_grid,
 )
 from backend.core.spatial_index import SpatialIndex
 from backend.core.violation_models import Violation, ViolationGeometry
@@ -95,9 +94,7 @@ class OffGridFix(FixStrategy):
             priority=2,  # Off-grid is second highest priority
         )
 
-    def _conservative_snap(
-        self, value: float, grid: float, center: float
-    ) -> float:
+    def _conservative_snap(self, value: float, grid: float, center: float) -> float:
         """Snap to grid conservatively — away from center (outward).
 
         This ensures snapping doesn't reduce polygon width.

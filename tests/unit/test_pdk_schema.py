@@ -15,9 +15,7 @@ from backend.pdk.schema import (
 
 class TestGDSLayer:
     def test_valid_layer(self):
-        layer = GDSLayer(
-            gds_layer=68, gds_datatype=20, description="Metal 1", color="#0000FF"
-        )
+        layer = GDSLayer(gds_layer=68, gds_datatype=20, description="Metal 1", color="#0000FF")
         assert layer.layer_pair == (68, 20)
         assert layer.is_routing is False
 
@@ -33,15 +31,11 @@ class TestGDSLayer:
 
     def test_invalid_color(self):
         with pytest.raises(ValidationError):
-            GDSLayer(
-                gds_layer=68, gds_datatype=20, description="Metal 1", color="blue"
-            )
+            GDSLayer(gds_layer=68, gds_datatype=20, description="Metal 1", color="blue")
 
     def test_negative_layer_number(self):
         with pytest.raises(ValidationError):
-            GDSLayer(
-                gds_layer=-1, gds_datatype=20, description="Bad", color="#000000"
-            )
+            GDSLayer(gds_layer=-1, gds_datatype=20, description="Bad", color="#000000")
 
 
 class TestDesignRule:
@@ -164,9 +158,7 @@ class TestPDKConfig:
                 ),
             ],
             connectivity=[
-                ConnectivityRule(
-                    via_layer="via", lower_layer="met1", upper_layer="met2"
-                ),
+                ConnectivityRule(via_layer="via", lower_layer="met1", upper_layer="met2"),
             ],
             fix_weights={
                 "min_width": FixStrategyWeight(priority=3),

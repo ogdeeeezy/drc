@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, UploadFile
@@ -55,7 +54,8 @@ async def upload_gds(file: UploadFile, pdk_name: str = "sky130"):
                 total += len(chunk)
                 if total > MAX_FILE_SIZE:
                     gds_path.unlink(missing_ok=True)
-                    raise HTTPException(413, f"File too large. Max size: {MAX_FILE_SIZE // (1024*1024)} MB")
+                    max_mb = MAX_FILE_SIZE // (1024 * 1024)
+                    raise HTTPException(413, f"File too large. Max: {max_mb} MB")
                 f.write(chunk)
     except HTTPException:
         raise

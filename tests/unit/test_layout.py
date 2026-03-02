@@ -5,7 +5,7 @@ from pathlib import Path
 import gdstk
 import pytest
 
-from backend.core.layout import LayoutManager, PolygonInfo
+from backend.core.layout import LayoutManager
 
 
 @pytest.fixture()
@@ -15,22 +15,31 @@ def sample_gds(tmp_path) -> Path:
     cell = lib.new_cell("top")
 
     # met1 rectangle: 0.14um x 1.0um
-    cell.add(gdstk.Polygon(
-        [(0, 0), (0.14, 0), (0.14, 1.0), (0, 1.0)],
-        layer=68, datatype=20,
-    ))
+    cell.add(
+        gdstk.Polygon(
+            [(0, 0), (0.14, 0), (0.14, 1.0), (0, 1.0)],
+            layer=68,
+            datatype=20,
+        )
+    )
 
     # met2 rectangle
-    cell.add(gdstk.Polygon(
-        [(0.5, 0), (1.0, 0), (1.0, 0.5), (0.5, 0.5)],
-        layer=69, datatype=20,
-    ))
+    cell.add(
+        gdstk.Polygon(
+            [(0.5, 0), (1.0, 0), (1.0, 0.5), (0.5, 0.5)],
+            layer=69,
+            datatype=20,
+        )
+    )
 
     # via
-    cell.add(gdstk.Polygon(
-        [(0, 0), (0.15, 0), (0.15, 0.15), (0, 0.15)],
-        layer=68, datatype=44,
-    ))
+    cell.add(
+        gdstk.Polygon(
+            [(0, 0), (0.15, 0), (0.15, 0.15), (0, 0.15)],
+            layer=68,
+            datatype=44,
+        )
+    )
 
     gds_path = tmp_path / "test.gds"
     lib.write_gds(str(gds_path))
@@ -43,10 +52,13 @@ def hierarchical_gds(tmp_path) -> Path:
     lib = gdstk.Library("hier_lib")
 
     sub_cell = lib.new_cell("sub")
-    sub_cell.add(gdstk.Polygon(
-        [(0, 0), (0.5, 0), (0.5, 0.5), (0, 0.5)],
-        layer=68, datatype=20,
-    ))
+    sub_cell.add(
+        gdstk.Polygon(
+            [(0, 0), (0.5, 0), (0.5, 0.5), (0, 0.5)],
+            layer=68,
+            datatype=20,
+        )
+    )
 
     top = lib.new_cell("top")
     top.add(gdstk.Reference(sub_cell, origin=(0, 0)))

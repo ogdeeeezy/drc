@@ -56,9 +56,7 @@ class TestViolationGeometry:
             edge2_start=(1.1, 2.0),
             edge2_end=(1.1, 2.5),
         )
-        geom = ViolationGeometry(
-            geometry_type=GeometryType.edge_pair, edge_pair=ep
-        )
+        geom = ViolationGeometry(geometry_type=GeometryType.edge_pair, edge_pair=ep)
         assert geom.bbox == (1.0, 2.0, 1.1, 2.5)
 
     def test_polygon_bbox(self):
@@ -85,9 +83,7 @@ class TestViolation:
             category="m1.1",
             description="width",
             cell_name="TOP",
-            geometries=[
-                ViolationGeometry(geometry_type=GeometryType.edge_pair, edge_pair=ep)
-            ],
+            geometries=[ViolationGeometry(geometry_type=GeometryType.edge_pair, edge_pair=ep)],
         )
         assert v.bbox == (1.0, 2.0, 1.1, 2.5)
         assert v.violation_count == 1
@@ -184,8 +180,6 @@ class TestDRCReport:
         assert len(vs) == 2
 
     def test_empty_report(self):
-        report = DRCReport(
-            description="", original_file="", generator="", top_cell=""
-        )
+        report = DRCReport(description="", original_file="", generator="", top_cell="")
         assert report.total_violations == 0
         assert report.categories == []

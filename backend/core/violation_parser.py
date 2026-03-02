@@ -57,7 +57,7 @@ def _parse_value(value_str: str) -> ViolationGeometry | None:
     value_str = value_str.strip()
 
     if value_str.startswith("edge-pair:"):
-        content = value_str[len("edge-pair:"):].strip()
+        content = value_str[len("edge-pair:") :].strip()
         # Split on '/' to get two edges: (x1,y1;x2,y2)/(x3,y3;x4,y4)
         # Each edge is in parentheses
         halves = re.split(r"\)\s*/\s*\(", content)
@@ -76,7 +76,7 @@ def _parse_value(value_str: str) -> ViolationGeometry | None:
         )
 
     if value_str.startswith("polygon:"):
-        content = value_str[len("polygon:"):].strip()
+        content = value_str[len("polygon:") :].strip()
         points = _parse_polygon_points(content)
         return ViolationGeometry(
             geometry_type=GeometryType.polygon,
@@ -84,7 +84,7 @@ def _parse_value(value_str: str) -> ViolationGeometry | None:
         )
 
     if value_str.startswith("edge:"):
-        content = value_str[len("edge:"):].strip()
+        content = value_str[len("edge:") :].strip()
         start, end = _parse_edge(content)
         return ViolationGeometry(
             geometry_type=GeometryType.edge,
@@ -97,7 +97,7 @@ def _parse_value(value_str: str) -> ViolationGeometry | None:
         )
 
     if value_str.startswith("box:"):
-        content = value_str[len("box:"):].strip()
+        content = value_str[len("box:") :].strip()
         content = content.strip("()")
         corners = content.split(";")
         p1 = _parse_coord_pair(corners[0])
@@ -117,9 +117,7 @@ def _parse_value(value_str: str) -> ViolationGeometry | None:
     return None
 
 
-def _parse_categories(
-    categories_elem: ET.Element, prefix: str = ""
-) -> dict[str, str]:
+def _parse_categories(categories_elem: ET.Element, prefix: str = "") -> dict[str, str]:
     """Recursively parse category tree into {name: description} mapping."""
     result: dict[str, str] = {}
     for cat in categories_elem.findall("category"):
@@ -234,7 +232,8 @@ class ViolationParser:
                 # Try matching by partial category name
                 # DRC decks sometimes use "layer.rule_number" format
                 for pdk_rule in pdk.rules:
-                    if pdk_rule.rule_id in violation.category or violation.category in pdk_rule.rule_id:
+                    cat = violation.category
+                    if pdk_rule.rule_id in cat or cat in pdk_rule.rule_id:
                         violation.rule_id = pdk_rule.rule_id
                         violation.rule_type = pdk_rule.rule_type.value
                         violation.severity = pdk_rule.severity

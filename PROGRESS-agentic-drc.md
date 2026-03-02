@@ -1,6 +1,33 @@
 # PROGRESS-agentic-drc
 
-> Session 1 archived → `docs/archive/archive-progress-agentic-drc.md`
+> Sessions 1-2 archived → `docs/archive/archive-progress-agentic-drc.md`
+
+---
+
+## Session 5: 2026-03-02 — Phase 4 complete (Production Hardening)
+
+### Done
+- **P4-1: Fix apply + re-DRC loop** — `export/gdsii.py` (versioned GDS export), `api/routes/fix.py` (apply-and-recheck endpoint combining fix+DRC in one call), iteration tracking on jobs, fix cache clearing on re-run. Status flow: `fixes_applied` → `running_drc` → `drc_complete`/`complete`.
+- **P4-2: SQLite job persistence** — `jobs/database.py` (thread-safe SQLite with WAL mode, thread-local connections), rewrote `jobs/manager.py` to use SQLite instead of JSON files. Schema includes `iteration` column. 8 database tests + 11 manager tests.
+- **P4-3: Report export (JSON, CSV, HTML)** — `export/report.py` (3 formats with proper escaping, severity colors), `api/routes/export.py` (`GET /jobs/{id}/report/{format}`). 9 export tests.
+- **P4-4: Docker + CI/CD** — Multi-stage `Dockerfile` (Python+KLayout+frontend), `docker-compose.yml` with health check, `.github/workflows/ci.yml` (lint+test+frontend build).
+- **P4-5: Density fill strategy** — `fix/strategies/density.py` (grid-aligned fill polygons, spacing-aware placement, stops at target density), added `min_density` to `RuleType` enum, registered in engine with priority 7. 8 strategy tests.
+- **Lint cleanup** — Fixed all pre-existing ruff errors (unused vars, long lines, import sorting) across entire codebase.
+- **273 unit tests total**, all passing. Frontend builds clean.
+
+### Decisions
+- SQLite WAL mode for concurrent reads during DRC execution
+- Job DB file lives at `data/jobs/jobs.db` alongside job directories
+- `fixes_applied` new status allows re-DRC without going through upload again
+- `apply-and-recheck` endpoint auto-sets `complete` if violations reach 0
+- Density fill uses PDK spacing/width rules for fill sizing, 25% default target
+- Versioned export: `_fixed.gds`, `_fixed_v2.gds`, etc.
+
+### Next
+- Install KLayout CLI for integration tests
+- Vendor SKY130 DRC deck
+- Write PDK authoring guide (`docs/pdk-authoring.md`)
+- End-to-end integration test with real DRC run
 
 ---
 
@@ -49,24 +76,3 @@
 - Phase 3: Web API + Layout Viewer (5 stories: FastAPI scaffold, DRC endpoints, fix endpoints, WebGL viewer, violation overlay)
 - Install KLayout CLI for integration tests
 - Vendor SKY130 DRC deck
-
----
-
-## Session 2: 2026-03-02 — Phase 1 implementation (P1-1, P1-2)
-
-### Done
-- **Project scaffold** — pyproject.toml, venv (Python 3.12), all deps installed (gdstk, klayout, fastapi, pydantic, rtree), Makefile, directory structure, .gitignore
-- **P1-1: PDK config schema + SKY130 config** — Pydantic models (GDSLayer, DesignRule, ConnectivityRule, FixStrategyWeight, PDKConfig), PDKRegistry with caching, SKY130 pdk.json with 22 layers + 51 rules from official SkyWater docs. 30 tests.
-- **P1-2: GDSII layout manager** — LayoutManager (gdstk load/save/flatten/add/remove/replace), geometry_utils (grid snap, bbox, area, distance). 45 tests.
-- **75 unit tests total**, all passing
-
-### Decisions
-- KLayout CLI not installed yet — Python klayout bindings work fine for parsing, CLI needed in P1-3 for batch DRC
-- SKY130 rules sourced from official SkyWater PDK readthedocs + periphery.csv, 5nm manufacturing grid confirmed
-
-### Next
-- P1-3: KLayout DRC runner (install `klayout` CLI, implement subprocess batch execution, temp file management)
-- P1-4: Violation parser (.lyrdb XML → Violation objects, map to PDK rules)
-- Vendor SKY130 DRC deck (`sky130A_mr.drc`) from efabless/mpw_precheck
-- Then Phase 2: Fix suggestion engine
-

@@ -13,7 +13,7 @@ from backend.core.violation_parser import (
     _parse_polygon_points,
     _parse_value,
 )
-from backend.pdk.schema import DesignRule, PDKConfig, GDSLayer, RuleType, FixStrategyWeight
+from backend.pdk.schema import DesignRule, GDSLayer, PDKConfig, RuleType
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "lyrdb"
 
@@ -64,9 +64,7 @@ class TestValueParsing:
         geom = _parse_value("polygon: (5.0,5.0;5.2,5.0;5.2,5.1;5.0,5.1)")
         assert geom is not None
         assert geom.geometry_type == GeometryType.polygon
-        assert geom.points == [
-            (5.0, 5.0), (5.2, 5.0), (5.2, 5.1), (5.0, 5.1)
-        ]
+        assert geom.points == [(5.0, 5.0), (5.2, 5.0), (5.2, 5.1), (5.0, 5.1)]
 
     def test_edge(self):
         geom = _parse_value("edge: (0.0,0.0;1.0,1.0)")
@@ -284,18 +282,27 @@ class TestPDKMapping:
             grid_um=0.005,
             layers={
                 "met1": GDSLayer(
-                    gds_layer=68, gds_datatype=20, description="Metal 1",
-                    color="#0000FF", is_routing=True,
+                    gds_layer=68,
+                    gds_datatype=20,
+                    description="Metal 1",
+                    color="#0000FF",
+                    is_routing=True,
                 ),
             },
             rules=[
                 DesignRule(
-                    rule_id="m1.1", rule_type=RuleType.min_width,
-                    layer="met1", value_um=0.140, severity=7,
+                    rule_id="m1.1",
+                    rule_type=RuleType.min_width,
+                    layer="met1",
+                    value_um=0.140,
+                    severity=7,
                 ),
                 DesignRule(
-                    rule_id="m1.2", rule_type=RuleType.min_spacing,
-                    layer="met1", value_um=0.140, severity=6,
+                    rule_id="m1.2",
+                    rule_type=RuleType.min_spacing,
+                    layer="met1",
+                    value_um=0.140,
+                    severity=6,
                 ),
             ],
             connectivity=[],

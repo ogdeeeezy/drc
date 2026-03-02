@@ -1,7 +1,5 @@
 """Tests for geometry utilities."""
 
-import math
-
 import pytest
 
 from backend.core.geometry_utils import (

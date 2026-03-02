@@ -11,7 +11,7 @@ from backend.core.geometry_utils import (
     snap_to_grid,
 )
 from backend.core.spatial_index import SpatialIndex
-from backend.core.violation_models import GeometryType, Violation, ViolationGeometry
+from backend.core.violation_models import Violation, ViolationGeometry
 from backend.fix.fix_models import FixConfidence, FixSuggestion, PolygonDelta
 from backend.fix.strategies.base import FixStrategy
 from backend.pdk.schema import PDKConfig
@@ -85,10 +85,7 @@ class ShortCircuitFix(FixStrategy):
         # Get the min spacing for this layer if available
         spacing_buffer = grid * 2  # default 2 grid points
         for rule in pdk.rules:
-            if (
-                rule.rule_type.value == "min_spacing"
-                and rule.layer in violation.category
-            ):
+            if rule.rule_type.value == "min_spacing" and rule.layer in violation.category:
                 spacing_buffer = rule.value_um
                 break
 

@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import tempfile
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from backend.config import DRC_TIMEOUT_SECONDS, KLAYOUT_BINARY, PDK_CONFIGS_DIR
@@ -80,8 +80,7 @@ class DRCRunner:
         deck_path = pdk_dir / pdk.klayout_drc_deck
         if not deck_path.exists():
             raise FileNotFoundError(
-                f"DRC deck not found: {deck_path}. "
-                f"Expected '{pdk.klayout_drc_deck}' in {pdk_dir}"
+                f"DRC deck not found: {deck_path}. Expected '{pdk.klayout_drc_deck}' in {pdk_dir}"
             )
         return deck_path
 
@@ -100,9 +99,12 @@ class DRCRunner:
         cmd = [
             self._binary,
             "-b",  # batch mode (no GUI)
-            "-r", str(drc_deck_path),
-            "-rd", f"input={gds_path}",
-            "-rd", f"report={report_path}",
+            "-r",
+            str(drc_deck_path),
+            "-rd",
+            f"input={gds_path}",
+            "-rd",
+            f"report={report_path}",
         ]
         if top_cell:
             cmd.extend(["-rd", f"topcell={top_cell}"])

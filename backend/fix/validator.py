@@ -16,7 +16,6 @@ from backend.core.geometry_utils import (
     min_edge_width,
     polygon_area,
     polygon_bbox,
-    snap_to_grid,
 )
 from backend.core.spatial_index import SpatialIndex
 from backend.fix.fix_models import FixConfidence, FixSuggestion, PolygonDelta
@@ -99,15 +98,13 @@ class FixValidator:
                     edge_width = min_edge_width(points)
                     if edge_width < rule.value_um - grid / 2:
                         issues.append(
-                            f"Width {edge_width:.4f}um < min {rule.value_um:.4f}um "
-                            f"({rule.rule_id})"
+                            f"Width {edge_width:.4f}um < min {rule.value_um:.4f}um ({rule.rule_id})"
                         )
 
                 if rule.rule_type.value == "min_area":
                     if area < rule.value_um - 1e-9:
                         issues.append(
-                            f"Area {area:.6f}um² < min {rule.value_um:.6f}um² "
-                            f"({rule.rule_id})"
+                            f"Area {area:.6f}um² < min {rule.value_um:.6f}um² ({rule.rule_id})"
                         )
 
         # 4. Min spacing check against neighbors
@@ -160,8 +157,7 @@ class FixValidator:
 
             if gap < min_spacing - self._pdk.grid_um / 2:
                 issues.append(
-                    f"Spacing {gap:.4f}um to neighbor < min {min_spacing:.4f}um "
-                    f"({spacing_rule_id})"
+                    f"Spacing {gap:.4f}um to neighbor < min {min_spacing:.4f}um ({spacing_rule_id})"
                 )
 
         return issues

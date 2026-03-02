@@ -23,22 +23,34 @@ def pdk():
         grid_um=0.005,
         layers={
             "met1": GDSLayer(
-                gds_layer=68, gds_datatype=20, description="Metal 1",
-                color="#0000FF", is_routing=True,
+                gds_layer=68,
+                gds_datatype=20,
+                description="Metal 1",
+                color="#0000FF",
+                is_routing=True,
             ),
         },
         rules=[
             DesignRule(
-                rule_id="m1.1", rule_type=RuleType.min_width,
-                layer="met1", value_um=0.140, severity=7,
+                rule_id="m1.1",
+                rule_type=RuleType.min_width,
+                layer="met1",
+                value_um=0.140,
+                severity=7,
             ),
             DesignRule(
-                rule_id="m1.2", rule_type=RuleType.min_spacing,
-                layer="met1", value_um=0.140, severity=6,
+                rule_id="m1.2",
+                rule_type=RuleType.min_spacing,
+                layer="met1",
+                value_um=0.140,
+                severity=6,
             ),
             DesignRule(
-                rule_id="m1.6", rule_type=RuleType.min_area,
-                layer="met1", value_um=0.083, severity=4,
+                rule_id="m1.6",
+                rule_type=RuleType.min_area,
+                layer="met1",
+                value_um=0.083,
+                severity=4,
             ),
         ],
         connectivity=[],
@@ -53,7 +65,9 @@ def spatial_index():
     polys = [
         PolygonInfo(
             points=[(100, 100), (101, 100), (101, 101), (100, 101)],
-            gds_layer=68, gds_datatype=20, cell_name="TOP",
+            gds_layer=68,
+            gds_datatype=20,
+            cell_name="TOP",
         ),
     ]
     return SpatialIndex.from_polygons(polys)
@@ -69,7 +83,8 @@ class TestFixValidator:
             deltas=[
                 PolygonDelta(
                     cell_name="TOP",
-                    gds_layer=68, gds_datatype=20,
+                    gds_layer=68,
+                    gds_datatype=20,
                     original_points=[(0, 0), (0.10, 0), (0.10, 1), (0, 1)],
                     modified_points=[(0, 0), (0.20, 0), (0.20, 1), (0, 1)],
                 )
@@ -88,7 +103,8 @@ class TestFixValidator:
             deltas=[
                 PolygonDelta(
                     cell_name="TOP",
-                    gds_layer=68, gds_datatype=20,
+                    gds_layer=68,
+                    gds_datatype=20,
                     original_points=[(0, 0), (0.10, 0), (0.10, 1), (0, 1)],
                     modified_points=[(0, 0), (0.143, 0), (0.143, 1), (0, 1)],  # off-grid
                 )
@@ -107,7 +123,8 @@ class TestFixValidator:
             deltas=[
                 PolygonDelta(
                     cell_name="TOP",
-                    gds_layer=68, gds_datatype=20,
+                    gds_layer=68,
+                    gds_datatype=20,
                     original_points=[(0, 0), (1, 0), (1, 1), (0, 1)],
                     modified_points=[(0, 0), (0, 0), (0, 0)],  # zero area
                 )
@@ -125,7 +142,8 @@ class TestFixValidator:
             deltas=[
                 PolygonDelta(
                     cell_name="TOP",
-                    gds_layer=68, gds_datatype=20,
+                    gds_layer=68,
+                    gds_datatype=20,
                     original_points=[(0, 0), (1, 0), (1, 1), (0, 1)],
                     modified_points=[(0, 0), (1, 0)],
                 )
@@ -144,7 +162,8 @@ class TestFixValidator:
             deltas=[
                 PolygonDelta(
                     cell_name="TOP",
-                    gds_layer=68, gds_datatype=20,
+                    gds_layer=68,
+                    gds_datatype=20,
                     original_points=[(0, 0), (0.20, 0), (0.20, 1), (0, 1)],
                     # Shrunk too narrow
                     modified_points=[(0, 0), (0.10, 0), (0.10, 1), (0, 1)],
@@ -164,7 +183,8 @@ class TestFixValidator:
             deltas=[
                 PolygonDelta(
                     cell_name="TOP",
-                    gds_layer=68, gds_datatype=20,
+                    gds_layer=68,
+                    gds_datatype=20,
                     original_points=[(0, 0), (1, 0), (1, 1), (0, 1)],
                     modified_points=[],
                 )
@@ -183,7 +203,8 @@ class TestFixValidator:
             deltas=[
                 PolygonDelta(
                     cell_name="TOP",
-                    gds_layer=68, gds_datatype=20,
+                    gds_layer=68,
+                    gds_datatype=20,
                     original_points=[(0, 0), (0.10, 0), (0.10, 1), (0, 1)],
                     modified_points=[(0, 0), (0.20, 0), (0.20, 1), (0, 1)],
                 )
@@ -202,7 +223,8 @@ class TestFixValidator:
             deltas=[
                 PolygonDelta(
                     cell_name="TOP",
-                    gds_layer=999, gds_datatype=0,
+                    gds_layer=999,
+                    gds_datatype=0,
                     original_points=[(0, 0), (1, 0), (1, 1), (0, 1)],
                     modified_points=[(0, 0), (2, 0), (2, 1), (0, 1)],
                 )

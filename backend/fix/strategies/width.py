@@ -7,8 +7,6 @@ If both sides are constrained, split the expansion evenly.
 from __future__ import annotations
 
 from backend.core.geometry_utils import (
-    bbox_height,
-    bbox_width,
     polygon_bbox,
     snap_to_grid,
 )
@@ -131,8 +129,7 @@ class MinWidthFix(FixStrategy):
             violation_category=violation.category,
             rule_type=self.rule_type,
             description=(
-                f"Expand polygon by {full_deficit:.3f}um to meet "
-                f"min width {min_width:.3f}um"
+                f"Expand polygon by {full_deficit:.3f}um to meet min width {min_width:.3f}um"
             ),
             deltas=[delta],
             confidence=FixConfidence.high,

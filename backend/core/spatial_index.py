@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 from rtree import index
 
-from backend.core.layout import PolygonInfo
 from backend.core.geometry_utils import polygon_bbox
+from backend.core.layout import PolygonInfo
 
 
 @dataclass
@@ -44,9 +43,7 @@ class SpatialIndex:
         idx_id = self._next_id
         self._next_id += 1
         self._idx.insert(idx_id, bbox)
-        self._polygons[idx_id] = IndexedPolygon(
-            index_id=idx_id, polygon=polygon, bbox=bbox
-        )
+        self._polygons[idx_id] = IndexedPolygon(index_id=idx_id, polygon=polygon, bbox=bbox)
         return idx_id
 
     def insert_many(self, polygons: list[PolygonInfo]) -> list[int]:

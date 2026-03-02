@@ -1,9 +1,8 @@
 """Tests for KLayout DRC runner — uses mocked subprocess since KLayout CLI may not be installed."""
 
-import shutil
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -36,14 +35,20 @@ def pdk_config(tmp_path):
         grid_um=0.005,
         layers={
             "met1": GDSLayer(
-                gds_layer=68, gds_datatype=20, description="Metal 1",
-                color="#0000FF", is_routing=True,
+                gds_layer=68,
+                gds_datatype=20,
+                description="Metal 1",
+                color="#0000FF",
+                is_routing=True,
             ),
         },
         rules=[
             DesignRule(
-                rule_id="m1.1", rule_type=RuleType.min_width,
-                layer="met1", value_um=0.140, severity=7,
+                rule_id="m1.1",
+                rule_type=RuleType.min_width,
+                layer="met1",
+                value_um=0.140,
+                severity=7,
             ),
         ],
         connectivity=[],
@@ -108,10 +113,14 @@ class TestBuildCommand:
             report_path=Path("/tmp/report.lyrdb"),
         )
         assert cmd == [
-            "klayout", "-b",
-            "-r", "/tmp/sky130.drc",
-            "-rd", "input=/tmp/test.gds",
-            "-rd", "report=/tmp/report.lyrdb",
+            "klayout",
+            "-b",
+            "-r",
+            "/tmp/sky130.drc",
+            "-rd",
+            "input=/tmp/test.gds",
+            "-rd",
+            "report=/tmp/report.lyrdb",
         ]
 
     def test_with_top_cell(self):
@@ -159,8 +168,6 @@ class TestDRCRunMocked:
         self, mock_run, mock_avail, pdk_config, sample_gds, lyrdb_content, tmp_path
     ):
         # Set up the mock: klayout "runs" and produces a .lyrdb file
-        report_path = tmp_path / "test_drc.lyrdb"
-
         def side_effect(*args, **kwargs):
             # Simulate KLayout writing a report file
             # Extract report path from command
@@ -170,9 +177,7 @@ class TestDRCRunMocked:
                     rpath = Path(arg.split("=", 1)[1])
                     rpath.write_text(lyrdb_content)
                     break
-            return subprocess.CompletedProcess(
-                args=cmd, returncode=0, stdout="", stderr=""
-            )
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
 
         mock_run.side_effect = side_effect
 
@@ -183,9 +188,7 @@ class TestDRCRunMocked:
             deck_dir.mkdir(parents=True, exist_ok=True)
             (deck_dir / "test.drc").write_text("# stub")
 
-            result = runner.run(
-                sample_gds, pdk_config, output_dir=tmp_path, map_to_pdk=False
-            )
+            result = runner.run(sample_gds, pdk_config, output_dir=tmp_path, map_to_pdk=False)
 
         assert result.returncode == 0
         assert result.has_violations is True
@@ -206,9 +209,7 @@ class TestDRCRunMocked:
 
     @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
     @patch("subprocess.run")
-    def test_klayout_failure(
-        self, mock_run, mock_avail, pdk_config, sample_gds, tmp_path
-    ):
+    def test_klayout_failure(self, mock_run, mock_avail, pdk_config, sample_gds, tmp_path):
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=1, stdout="", stderr="DRC script error"
         )
@@ -235,9 +236,7 @@ class TestDRCRunMocked:
 
     @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
     @patch("subprocess.run")
-    def test_no_report_generated(
-        self, mock_run, mock_avail, pdk_config, sample_gds, tmp_path
-    ):
+    def test_no_report_generated(self, mock_run, mock_avail, pdk_config, sample_gds, tmp_path):
         # KLayout succeeds but no report file created
         mock_run.return_value = subprocess.CompletedProcess(
             args=[], returncode=0, stdout="", stderr=""
@@ -263,10 +262,15 @@ class TestDRCResult:
         )
 
         report = DRCReport(
-            description="test", original_file="", generator="", top_cell="TOP",
+            description="test",
+            original_file="",
+            generator="",
+            top_cell="TOP",
             violations=[
                 Violation(
-                    category="m1.1", description="width", cell_name="TOP",
+                    category="m1.1",
+                    description="width",
+                    cell_name="TOP",
                     geometries=[
                         ViolationGeometry(
                             geometry_type=GeometryType.edge_pair,
@@ -279,7 +283,9 @@ class TestDRCResult:
                     ],
                 ),
                 Violation(
-                    category="m1.2", description="spacing", cell_name="TOP",
+                    category="m1.2",
+                    description="spacing",
+                    cell_name="TOP",
                     geometries=[
                         ViolationGeometry(
                             geometry_type=GeometryType.edge_pair,
@@ -304,9 +310,7 @@ class TestDRCResult:
     def test_no_violations(self):
         from backend.core.violation_models import DRCReport
 
-        report = DRCReport(
-            description="clean", original_file="", generator="", top_cell="TOP"
-        )
+        report = DRCReport(description="clean", original_file="", generator="", top_cell="TOP")
         result = DRCResult(
             report=report,
             report_path=Path("/tmp/test.lyrdb"),

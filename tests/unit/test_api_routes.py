@@ -3,14 +3,13 @@
 import io
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import gdstk
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.api import deps
-from backend.jobs.manager import JobManager, JobStatus
 from backend.main import app
 
 
@@ -33,6 +32,7 @@ def client(tmp_dir):
     """Test client with isolated job/upload dirs."""
     # Override config paths
     import backend.config as cfg
+
     original_jobs = cfg.JOBS_DIR
     original_uploads = cfg.UPLOAD_DIR
     cfg.JOBS_DIR = tmp_dir / "jobs"
@@ -237,9 +237,8 @@ class TestDRC:
 </report-database>"""
 
         # Mock the DRC runner
-        from backend.core.violation_models import DRCReport
-        from backend.core.violation_parser import ViolationParser
         from backend.core.drc_runner import DRCResult
+        from backend.core.violation_parser import ViolationParser
 
         parser = ViolationParser()
         report = parser.parse_string(lyrdb_content)

@@ -7,9 +7,7 @@ from backend.core.spatial_index import SpatialIndex
 
 
 def _poly(points, layer=68, datatype=20, cell="TOP"):
-    return PolygonInfo(
-        points=points, gds_layer=layer, gds_datatype=datatype, cell_name=cell
-    )
+    return PolygonInfo(points=points, gds_layer=layer, gds_datatype=datatype, cell_name=cell)
 
 
 class TestSpatialIndex:

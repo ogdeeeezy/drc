@@ -93,8 +93,6 @@ class EnclosureFix(FixStrategy):
         expand = snap_to_grid(deficit, grid)
 
         # Check which edges of the metal are close to the violation
-        new_points = list(original)
-
         # Determine if the violation is near the left/right/top/bottom edge
         near_left = abs(vbox[0] - orig_bbox[0]) < min_enclosure * 1.5
         near_right = abs(vbox[2] - orig_bbox[2]) < min_enclosure * 1.5
@@ -134,8 +132,7 @@ class EnclosureFix(FixStrategy):
             violation_category=violation.category,
             rule_type=self.rule_type,
             description=(
-                f"Extend metal by {expand:.3f}um to meet "
-                f"min enclosure {min_enclosure:.3f}um"
+                f"Extend metal by {expand:.3f}um to meet min enclosure {min_enclosure:.3f}um"
             ),
             deltas=[delta],
             confidence=FixConfidence.medium,
