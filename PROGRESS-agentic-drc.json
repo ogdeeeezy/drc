@@ -1,0 +1,41 @@
+{
+  "project": "agentic-drc",
+  "location": "/Users/claudesplayground/agentic-drc",
+  "description": "Open-source DRC tool — PVS alternative for semiconductor layout verification",
+  "current_phase": "Phase 1 - Core DRC Engine",
+  "current_story": null,
+  "status": "not_started",
+  "sessions": [
+    {
+      "number": 1,
+      "date": "2026-03-02",
+      "title": "Architecture & plan",
+      "completed": [
+        "Requirements gathering and scope definition",
+        "Landscape research (KLayout, Magic, OpenROAD, gdstk, SKY130)",
+        "Full architecture design with PDK-agnostic config system",
+        "Fix strategy research for 6 violation types",
+        "4-phase, 19-story implementation plan"
+      ],
+      "next": [
+        "Set up Python project (pyproject.toml, venv, deps)",
+        "P1-1: PDK config schema + SKY130 pdk.json",
+        "P1-2: GDSII layout manager",
+        "P1-3: KLayout DRC runner",
+        "P1-4: Violation parser"
+      ]
+    }
+  ],
+  "tech_stack": {
+    "backend": "Python 3.12, FastAPI, gdstk, klayout, pydantic",
+    "frontend": "React, TypeScript, Vite, WebGL",
+    "drc_engine": "KLayout batch mode",
+    "storage": "SQLite, filesystem",
+    "deployment": "Docker"
+  },
+  "key_files": {
+    "plan": "~/.claude/plans/delegated-hopping-pixel.md",
+    "progress": "~/agentic-drc/PROGRESS-agentic-drc.md",
+    "handoff": "~/agentic-drc/HANDOFF-agentic-drc.md"
+  }
+}
