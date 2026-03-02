@@ -1,5 +1,30 @@
 # PROGRESS-agentic-drc
 
+> Session 1 archived → `docs/archive/archive-progress-agentic-drc.md`
+
+---
+
+## Session 4: 2026-03-02 — Phase 3 complete (Web API + Layout Viewer)
+
+### Done
+- **P3-1: FastAPI scaffold + upload/job** — `jobs/manager.py` (JSON-persisted job lifecycle), `api/routes/upload.py` (multipart GDSII upload), `api/deps.py` (singleton managers), CORS middleware. 18 tests.
+- **P3-2: DRC + violation API** — `api/routes/drc.py` (sync DRC trigger, violation retrieval with PDK mapping). Mocked KLayout integration test.
+- **P3-3: Fix suggestion + preview API** — `api/routes/fix.py` (suggest/preview/apply endpoints, in-memory fix cache, polygon delta application).
+- **P3-4: Layout geometry API + WebGL viewer** — `api/routes/layout.py` (polygons by layer with PDK colors), `api/routes/pdk.py` (PDK listing/details). React+Vite+TypeScript frontend with `WebGLRenderer.ts` (earcut triangulation, pan/zoom/fit), `LayoutViewer.tsx`, `LayerPanel.tsx`.
+- **P3-5: Violation overlay + fix panel UI** — `ViolationList.tsx` (sortable by severity/count/rule), `ViolationOverlay.tsx` (violation badge), `FixPanel.tsx` (checkbox selection, apply, preview modal), `FixPreview.tsx` (SVG before/after diff).
+- **243 unit tests total**, all passing. Frontend builds clean (TypeScript + Vite).
+
+### Decisions
+- Job persistence via JSON files in `data/jobs/<id>/` (not SQLite yet — Phase 4)
+- API deps use late-import config for test isolation
+- WebGL renderer uses simple vertex/fragment shaders with camera transform, earcut for triangulation
+- Fix preview uses SVG (not WebGL) for before/after polygon diff — simpler
+
+### Next
+- Phase 4: Production Hardening (fix-apply re-DRC loop, SQLite, report export, Docker, density fill)
+- Install KLayout CLI for integration tests
+- Vendor SKY130 DRC deck
+
 ---
 
 ## Session 3: 2026-03-02 — Phase 1 complete + Phase 2 complete
@@ -45,27 +70,3 @@
 - Vendor SKY130 DRC deck (`sky130A_mr.drc`) from efabless/mpw_precheck
 - Then Phase 2: Fix suggestion engine
 
----
-
-## Session 1: 2026-03-02 — Architecture & plan
-
-### Done
-- **Requirements gathering** — Clarified scope: PVS-like DRC tool, DRC-only, SKY130, GDSII input, suggest-only MVP, commercial target
-- **Landscape research** — Deep dive on KLayout (DRC engine, Python API, .lyrdb format), Magic VLSI, OpenROAD, gdstk, SKY130 PDK rule decks, Cadence PVS workflow
-- **Architecture design** — PDK-agnostic engine with SKY130 as first config. Hybrid approach: KLayout batch DRC + gdstk for GDSII I/O + Python fix engine
-- **Fix strategy research** — Documented deterministic fix algorithms for all 6 violation types (width, spacing, enclosure, area, off-grid, short) with priority ordering and pre-validation
-- **Full implementation plan** — 4-phase, 19-story build plan with directory structure, PDK config schema, class hierarchy, API endpoints, testing strategy, and e2e workflows
-
-### Decisions
-- No LLM in MVP — deterministic rules-based expert system. LLM layer is future work (reads PDK docs, generates rule decks)
-- KLayout as DRC engine (subprocess batch mode) — not building custom DRC from scratch
-- gdstk for GDSII manipulation, klayout.db for Region operations, klayout.rdb for violation parsing
-- ~80% of system is PDK-agnostic — new PDKs are JSON config, not code changes
-- Web UI with WebGL viewer (earcut triangulation) + KLayout plugin later
-
-### Next
-- Set up Python project (`pyproject.toml`, venv, deps: gdstk, klayout, fastapi, pydantic)
-- Implement Phase 1 Story 1: PDK config schema + SKY130 pdk.json
-- Implement Phase 1 Story 2: GDSII layout manager
-- Implement Phase 1 Story 3: KLayout DRC runner
-- Implement Phase 1 Story 4: Violation parser

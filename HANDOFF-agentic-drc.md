@@ -6,16 +6,23 @@ Open-source DRC (Design Rule Check) tool — PVS alternative for semiconductor l
 ## Current State
 - **Phase 1 (Core DRC Engine)**: COMPLETE — 4/4 stories
 - **Phase 2 (Fix Suggestion Engine)**: COMPLETE — 5/5 stories
-- **214 unit tests**, all passing (`make test`)
+- **Phase 3 (Web API + Layout Viewer)**: COMPLETE — 5/5 stories
+- **243 unit tests**, all passing (`make test`)
+- **Frontend builds clean** (`cd frontend && npm run build`)
 - Python 3.12 venv at `.venv/`, all deps installed
 - KLayout CLI NOT installed yet — unit tests mock subprocess, integration tests will need it
 
-## Immediate Next Steps (Phase 3: Web API + Layout Viewer)
-1. **P3-1: FastAPI scaffold + upload/job endpoints** — `main.py`, `api/routes/upload.py`, `jobs/manager.py`
-2. **P3-2: DRC + violation API routes** — `api/routes/drc.py`, `jobs/worker.py`
-3. **P3-3: Fix suggestion + preview API** — `api/routes/fix.py`
-4. **P3-4: Layout geometry API + WebGL viewer** — `api/routes/layout.py`, `WebGLRenderer.ts`, `LayoutViewer.tsx`
-5. **P3-5: Violation overlay + fix panel UI** — `ViolationList.tsx`, `ViolationOverlay.tsx`, `FixPanel.tsx`
+## How to Run
+- Backend: `make run` (uvicorn on port 8000)
+- Frontend: `make frontend` (Vite dev server on port 5173, proxies /api to backend)
+- Tests: `make test`
+
+## Immediate Next Steps (Phase 4: Production Hardening)
+1. **P4-1: Fix application + re-DRC loop** — `fix/engine.py`, `export/gdsii.py`
+2. **P4-2: SQLite job persistence** — `jobs/database.py`
+3. **P4-3: Report export (JSON, CSV, HTML)** — `export/report.py`
+4. **P4-4: Docker + CI/CD** — `Dockerfile`, `docker-compose.yml`, `.github/workflows/ci.yml`
+5. **P4-5: Density fill strategy + PDK authoring docs** — `fix/strategies/density.py`, `docs/pdk-authoring.md`
 
 Also still needed:
 - **Install KLayout CLI**: `brew install klayout` — for integration tests
@@ -26,16 +33,20 @@ Also still needed:
 - **gdstk** for GDSII read/write/modify
 - **PDK-agnostic**: everything parameterized by `pdk.json`
 - **Fix priority**: shorts > off-grid > width > spacing > enclosure > area
-- **Fix strategies**: expand (width), move/shrink (spacing), extend metal (enclosure), extend wire (area), shrink overlap (short), conservative snap (offgrid)
-- **Pre-validation**: grid alignment, degenerate polygon, min width/area/spacing checks before suggesting
+- **Job persistence**: JSON files in `data/jobs/<id>/` (SQLite planned for P4-2)
+- **WebGL viewer**: earcut triangulation, camera transform shaders, pan/zoom
+- **Fix preview**: SVG-based before/after polygon diff
 
 ## Hot Files
-- `backend/pdk/schema.py` — PDK config models
-- `backend/core/drc_runner.py` — KLayout subprocess wrapper
-- `backend/core/violation_parser.py` — .lyrdb XML → DRCReport
-- `backend/core/violation_models.py` — EdgePair, Violation, DRCReport
-- `backend/core/spatial_index.py` — R-tree polygon lookups
-- `backend/fix/engine.py` — Fix orchestrator (strategies + validator + ranking)
-- `backend/fix/strategies/` — 6 strategies (width, spacing, enclosure, area, short, offgrid)
-- `backend/fix/validator.py` — Pre-validation of fix suggestions
-- `backend/fix/fix_models.py` — FixSuggestion, PolygonDelta
+- `backend/main.py` — FastAPI app with all route registrations
+- `backend/api/deps.py` — Singleton managers (JobManager, PDKRegistry)
+- `backend/api/routes/upload.py` — GDSII upload + job creation
+- `backend/api/routes/drc.py` — DRC trigger + violation retrieval
+- `backend/api/routes/fix.py` — Fix suggest/preview/apply
+- `backend/api/routes/layout.py` — Geometry data for WebGL viewer
+- `backend/api/routes/pdk.py` — PDK listing/details
+- `backend/jobs/manager.py` — Job lifecycle (JSON persistence)
+- `backend/fix/engine.py` — Fix orchestrator
+- `frontend/src/App.tsx` — Main app component (upload → DRC → fix flow)
+- `frontend/src/components/Layout/WebGLRenderer.ts` — WebGL rendering engine
+- `frontend/src/api/client.ts` — Typed API client

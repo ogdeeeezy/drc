@@ -1,4 +1,4 @@
-.PHONY: install dev test lint run clean
+.PHONY: install dev test lint run clean frontend frontend-build
 
 PYTHON := python3.12
 VENV := .venv
@@ -30,6 +30,15 @@ format:
 
 run:
 	$(BIN)/uvicorn backend.main:app --reload --port 8000
+
+frontend:
+	cd frontend && npm run dev
+
+frontend-build:
+	cd frontend && npm run build
+
+frontend-install:
+	cd frontend && npm install
 
 clean:
 	rm -rf $(VENV) *.egg-info dist build __pycache__
