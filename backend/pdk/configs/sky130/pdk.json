@@ -1,0 +1,694 @@
+{
+  "name": "sky130",
+  "version": "0.0.2",
+  "process_node_nm": 130,
+  "grid_um": 0.005,
+  "klayout_drc_deck": "sky130A_mr.drc",
+  "layers": {
+    "nwell": {
+      "gds_layer": 64,
+      "gds_datatype": 20,
+      "description": "N-well region",
+      "color": "#808000",
+      "is_routing": false,
+      "is_via": false
+    },
+    "dnwell": {
+      "gds_layer": 64,
+      "gds_datatype": 18,
+      "description": "Deep N-well region",
+      "color": "#606000",
+      "is_routing": false,
+      "is_via": false
+    },
+    "diff": {
+      "gds_layer": 65,
+      "gds_datatype": 20,
+      "description": "Active / diffusion area",
+      "color": "#008000",
+      "is_routing": false,
+      "is_via": false
+    },
+    "tap": {
+      "gds_layer": 65,
+      "gds_datatype": 44,
+      "description": "Substrate / well tap",
+      "color": "#00A000",
+      "is_routing": false,
+      "is_via": false
+    },
+    "poly": {
+      "gds_layer": 66,
+      "gds_datatype": 20,
+      "description": "Polysilicon",
+      "color": "#FF0000",
+      "is_routing": false,
+      "is_via": false
+    },
+    "nsdm": {
+      "gds_layer": 93,
+      "gds_datatype": 44,
+      "description": "N+ source/drain implant",
+      "color": "#C0C000",
+      "is_routing": false,
+      "is_via": false
+    },
+    "psdm": {
+      "gds_layer": 94,
+      "gds_datatype": 20,
+      "description": "P+ source/drain implant",
+      "color": "#00C0C0",
+      "is_routing": false,
+      "is_via": false
+    },
+    "npc": {
+      "gds_layer": 95,
+      "gds_datatype": 20,
+      "description": "Nitride poly cut",
+      "color": "#A0A0A0",
+      "is_routing": false,
+      "is_via": false
+    },
+    "licon1": {
+      "gds_layer": 66,
+      "gds_datatype": 44,
+      "description": "Local interconnect contact (diff/poly to li1)",
+      "color": "#404040",
+      "is_routing": false,
+      "is_via": true
+    },
+    "li1": {
+      "gds_layer": 67,
+      "gds_datatype": 20,
+      "description": "Local interconnect (first routing layer)",
+      "color": "#0080FF",
+      "is_routing": true,
+      "is_via": false
+    },
+    "mcon": {
+      "gds_layer": 67,
+      "gds_datatype": 44,
+      "description": "Metal contact (li1 to met1)",
+      "color": "#606060",
+      "is_routing": false,
+      "is_via": true
+    },
+    "met1": {
+      "gds_layer": 68,
+      "gds_datatype": 20,
+      "description": "Metal 1",
+      "color": "#0000FF",
+      "is_routing": true,
+      "is_via": false
+    },
+    "via": {
+      "gds_layer": 68,
+      "gds_datatype": 44,
+      "description": "Via (met1 to met2)",
+      "color": "#808080",
+      "is_routing": false,
+      "is_via": true
+    },
+    "met2": {
+      "gds_layer": 69,
+      "gds_datatype": 20,
+      "description": "Metal 2",
+      "color": "#FF00FF",
+      "is_routing": true,
+      "is_via": false
+    },
+    "via2": {
+      "gds_layer": 69,
+      "gds_datatype": 44,
+      "description": "Via2 (met2 to met3)",
+      "color": "#909090",
+      "is_routing": false,
+      "is_via": true
+    },
+    "met3": {
+      "gds_layer": 70,
+      "gds_datatype": 20,
+      "description": "Metal 3",
+      "color": "#00FFFF",
+      "is_routing": true,
+      "is_via": false
+    },
+    "via3": {
+      "gds_layer": 70,
+      "gds_datatype": 44,
+      "description": "Via3 (met3 to met4)",
+      "color": "#A0A0A0",
+      "is_routing": false,
+      "is_via": true
+    },
+    "met4": {
+      "gds_layer": 71,
+      "gds_datatype": 20,
+      "description": "Metal 4",
+      "color": "#FFFF00",
+      "is_routing": true,
+      "is_via": false
+    },
+    "via4": {
+      "gds_layer": 71,
+      "gds_datatype": 44,
+      "description": "Via4 (met4 to met5)",
+      "color": "#B0B0B0",
+      "is_routing": false,
+      "is_via": true
+    },
+    "met5": {
+      "gds_layer": 72,
+      "gds_datatype": 20,
+      "description": "Metal 5",
+      "color": "#FF8000",
+      "is_routing": true,
+      "is_via": false
+    },
+    "pad": {
+      "gds_layer": 76,
+      "gds_datatype": 20,
+      "description": "Pad opening (passivation cut)",
+      "color": "#C0C0C0",
+      "is_routing": false,
+      "is_via": false
+    },
+    "hvi": {
+      "gds_layer": 75,
+      "gds_datatype": 20,
+      "description": "High voltage thick oxide identifier",
+      "color": "#800080",
+      "is_routing": false,
+      "is_via": false
+    }
+  },
+  "rules": [
+    {
+      "rule_id": "nwell.1",
+      "rule_type": "min_width",
+      "layer": "nwell",
+      "value_um": 0.840,
+      "description": "Min width of nwell",
+      "severity": 6
+    },
+    {
+      "rule_id": "nwell.2a",
+      "rule_type": "min_spacing",
+      "layer": "nwell",
+      "value_um": 1.270,
+      "description": "Min spacing nwell-to-nwell",
+      "severity": 6
+    },
+    {
+      "rule_id": "difftap.1",
+      "rule_type": "min_width",
+      "layer": "diff",
+      "value_um": 0.150,
+      "description": "Min width of diff or tap",
+      "severity": 7
+    },
+    {
+      "rule_id": "difftap.3",
+      "rule_type": "min_spacing",
+      "layer": "diff",
+      "value_um": 0.270,
+      "description": "Min spacing diff-to-diff or tap-to-tap",
+      "severity": 7
+    },
+    {
+      "rule_id": "difftap.8",
+      "rule_type": "min_enclosure",
+      "layer": "nwell",
+      "related_layer": "diff",
+      "value_um": 0.180,
+      "description": "Min enclosure of p+ diff by nwell",
+      "severity": 7
+    },
+    {
+      "rule_id": "poly.1a",
+      "rule_type": "min_width",
+      "layer": "poly",
+      "value_um": 0.150,
+      "description": "Min width of poly",
+      "severity": 8
+    },
+    {
+      "rule_id": "poly.2",
+      "rule_type": "min_spacing",
+      "layer": "poly",
+      "value_um": 0.210,
+      "description": "Min spacing poly-to-poly",
+      "severity": 8
+    },
+    {
+      "rule_id": "poly.7",
+      "rule_type": "min_extension",
+      "layer": "diff",
+      "related_layer": "poly",
+      "value_um": 0.250,
+      "description": "Min extension of diff beyond poly (source/drain)",
+      "severity": 9
+    },
+    {
+      "rule_id": "poly.8",
+      "rule_type": "min_extension",
+      "layer": "poly",
+      "related_layer": "diff",
+      "value_um": 0.130,
+      "description": "Min extension of poly beyond diff (endcap)",
+      "severity": 9
+    },
+    {
+      "rule_id": "licon.1",
+      "rule_type": "exact_size",
+      "layer": "licon1",
+      "value_um": 0.170,
+      "description": "Fixed width and length of licon (square)",
+      "severity": 8
+    },
+    {
+      "rule_id": "licon.2",
+      "rule_type": "min_spacing",
+      "layer": "licon1",
+      "value_um": 0.170,
+      "description": "Min spacing licon-to-licon",
+      "severity": 7
+    },
+    {
+      "rule_id": "licon.5a",
+      "rule_type": "min_enclosure",
+      "layer": "diff",
+      "related_layer": "licon1",
+      "value_um": 0.040,
+      "description": "Min enclosure of licon by diff",
+      "severity": 7
+    },
+    {
+      "rule_id": "licon.8",
+      "rule_type": "min_enclosure",
+      "layer": "poly",
+      "related_layer": "licon1",
+      "value_um": 0.050,
+      "description": "Min enclosure of poly_licon by poly",
+      "severity": 7
+    },
+    {
+      "rule_id": "li.1",
+      "rule_type": "min_width",
+      "layer": "li1",
+      "value_um": 0.170,
+      "description": "Min width of li1",
+      "severity": 7
+    },
+    {
+      "rule_id": "li.3",
+      "rule_type": "min_spacing",
+      "layer": "li1",
+      "value_um": 0.170,
+      "description": "Min spacing li1-to-li1",
+      "severity": 7
+    },
+    {
+      "rule_id": "li.5",
+      "rule_type": "min_enclosure",
+      "layer": "li1",
+      "related_layer": "licon1",
+      "value_um": 0.080,
+      "description": "Min enclosure of licon by li1 (one of two adj sides)",
+      "severity": 7
+    },
+    {
+      "rule_id": "li.6",
+      "rule_type": "min_area",
+      "layer": "li1",
+      "value_um": 0.0561,
+      "description": "Min area of li1 (um^2)",
+      "severity": 5
+    },
+    {
+      "rule_id": "ct.1",
+      "rule_type": "exact_size",
+      "layer": "mcon",
+      "value_um": 0.170,
+      "description": "Fixed width and length of mcon (square)",
+      "severity": 8
+    },
+    {
+      "rule_id": "ct.2",
+      "rule_type": "min_spacing",
+      "layer": "mcon",
+      "value_um": 0.190,
+      "description": "Min spacing mcon-to-mcon",
+      "severity": 7
+    },
+    {
+      "rule_id": "m1.1",
+      "rule_type": "min_width",
+      "layer": "met1",
+      "value_um": 0.140,
+      "description": "Min width of met1",
+      "severity": 7
+    },
+    {
+      "rule_id": "m1.2",
+      "rule_type": "min_spacing",
+      "layer": "met1",
+      "value_um": 0.140,
+      "description": "Min spacing met1-to-met1",
+      "severity": 7
+    },
+    {
+      "rule_id": "m1.4",
+      "rule_type": "min_enclosure",
+      "layer": "met1",
+      "related_layer": "mcon",
+      "value_um": 0.030,
+      "description": "Min enclosure of mcon by met1",
+      "severity": 7
+    },
+    {
+      "rule_id": "m1.5",
+      "rule_type": "min_enclosure",
+      "layer": "met1",
+      "related_layer": "mcon",
+      "value_um": 0.060,
+      "description": "Min enclosure of mcon by met1 (one of two adj sides)",
+      "severity": 7
+    },
+    {
+      "rule_id": "m1.6",
+      "rule_type": "min_area",
+      "layer": "met1",
+      "value_um": 0.083,
+      "description": "Min area of met1 (um^2)",
+      "severity": 5
+    },
+    {
+      "rule_id": "via.1a",
+      "rule_type": "exact_size",
+      "layer": "via",
+      "value_um": 0.150,
+      "description": "Fixed width and length of via (square)",
+      "severity": 8
+    },
+    {
+      "rule_id": "via.2",
+      "rule_type": "min_spacing",
+      "layer": "via",
+      "value_um": 0.170,
+      "description": "Min spacing via-to-via",
+      "severity": 7
+    },
+    {
+      "rule_id": "via.4a",
+      "rule_type": "min_enclosure",
+      "layer": "met1",
+      "related_layer": "via",
+      "value_um": 0.055,
+      "description": "Min enclosure of via by met1",
+      "severity": 7
+    },
+    {
+      "rule_id": "m2.1",
+      "rule_type": "min_width",
+      "layer": "met2",
+      "value_um": 0.140,
+      "description": "Min width of met2",
+      "severity": 7
+    },
+    {
+      "rule_id": "m2.2",
+      "rule_type": "min_spacing",
+      "layer": "met2",
+      "value_um": 0.140,
+      "description": "Min spacing met2-to-met2",
+      "severity": 7
+    },
+    {
+      "rule_id": "m2.4",
+      "rule_type": "min_enclosure",
+      "layer": "met2",
+      "related_layer": "via",
+      "value_um": 0.055,
+      "description": "Min enclosure of via by met2",
+      "severity": 7
+    },
+    {
+      "rule_id": "m2.6",
+      "rule_type": "min_area",
+      "layer": "met2",
+      "value_um": 0.0676,
+      "description": "Min area of met2 (um^2)",
+      "severity": 5
+    },
+    {
+      "rule_id": "via2.1a",
+      "rule_type": "exact_size",
+      "layer": "via2",
+      "value_um": 0.200,
+      "description": "Fixed width and length of via2 (square)",
+      "severity": 8
+    },
+    {
+      "rule_id": "via2.2",
+      "rule_type": "min_spacing",
+      "layer": "via2",
+      "value_um": 0.200,
+      "description": "Min spacing via2-to-via2",
+      "severity": 7
+    },
+    {
+      "rule_id": "via2.4",
+      "rule_type": "min_enclosure",
+      "layer": "met2",
+      "related_layer": "via2",
+      "value_um": 0.040,
+      "description": "Min enclosure of via2 by met2",
+      "severity": 7
+    },
+    {
+      "rule_id": "m3.1",
+      "rule_type": "min_width",
+      "layer": "met3",
+      "value_um": 0.300,
+      "description": "Min width of met3",
+      "severity": 7
+    },
+    {
+      "rule_id": "m3.2",
+      "rule_type": "min_spacing",
+      "layer": "met3",
+      "value_um": 0.300,
+      "description": "Min spacing met3-to-met3",
+      "severity": 7
+    },
+    {
+      "rule_id": "m3.4",
+      "rule_type": "min_enclosure",
+      "layer": "met3",
+      "related_layer": "via2",
+      "value_um": 0.065,
+      "description": "Min enclosure of via2 by met3",
+      "severity": 7
+    },
+    {
+      "rule_id": "m3.6",
+      "rule_type": "min_area",
+      "layer": "met3",
+      "value_um": 0.240,
+      "description": "Min area of met3 (um^2)",
+      "severity": 5
+    },
+    {
+      "rule_id": "via3.1",
+      "rule_type": "exact_size",
+      "layer": "via3",
+      "value_um": 0.200,
+      "description": "Fixed width and length of via3 (square)",
+      "severity": 8
+    },
+    {
+      "rule_id": "via3.2",
+      "rule_type": "min_spacing",
+      "layer": "via3",
+      "value_um": 0.200,
+      "description": "Min spacing via3-to-via3",
+      "severity": 7
+    },
+    {
+      "rule_id": "via3.4",
+      "rule_type": "min_enclosure",
+      "layer": "met3",
+      "related_layer": "via3",
+      "value_um": 0.060,
+      "description": "Min enclosure of via3 by met3",
+      "severity": 7
+    },
+    {
+      "rule_id": "m4.1",
+      "rule_type": "min_width",
+      "layer": "met4",
+      "value_um": 0.300,
+      "description": "Min width of met4",
+      "severity": 7
+    },
+    {
+      "rule_id": "m4.2",
+      "rule_type": "min_spacing",
+      "layer": "met4",
+      "value_um": 0.300,
+      "description": "Min spacing met4-to-met4",
+      "severity": 7
+    },
+    {
+      "rule_id": "m4.3",
+      "rule_type": "min_enclosure",
+      "layer": "met4",
+      "related_layer": "via3",
+      "value_um": 0.065,
+      "description": "Min enclosure of via3 by met4",
+      "severity": 7
+    },
+    {
+      "rule_id": "m4.4a",
+      "rule_type": "min_area",
+      "layer": "met4",
+      "value_um": 0.240,
+      "description": "Min area of met4 (um^2)",
+      "severity": 5
+    },
+    {
+      "rule_id": "via4.1",
+      "rule_type": "exact_size",
+      "layer": "via4",
+      "value_um": 0.800,
+      "description": "Fixed width and length of via4 (square)",
+      "severity": 8
+    },
+    {
+      "rule_id": "via4.2",
+      "rule_type": "min_spacing",
+      "layer": "via4",
+      "value_um": 0.800,
+      "description": "Min spacing via4-to-via4",
+      "severity": 7
+    },
+    {
+      "rule_id": "via4.4",
+      "rule_type": "min_enclosure",
+      "layer": "met4",
+      "related_layer": "via4",
+      "value_um": 0.190,
+      "description": "Min enclosure of via4 by met4",
+      "severity": 7
+    },
+    {
+      "rule_id": "m5.1",
+      "rule_type": "min_width",
+      "layer": "met5",
+      "value_um": 1.600,
+      "description": "Min width of met5",
+      "severity": 7
+    },
+    {
+      "rule_id": "m5.2",
+      "rule_type": "min_spacing",
+      "layer": "met5",
+      "value_um": 1.600,
+      "description": "Min spacing met5-to-met5",
+      "severity": 7
+    },
+    {
+      "rule_id": "m5.3",
+      "rule_type": "min_enclosure",
+      "layer": "met5",
+      "related_layer": "via4",
+      "value_um": 0.310,
+      "description": "Min enclosure of via4 by met5",
+      "severity": 7
+    },
+    {
+      "rule_id": "m5.4",
+      "rule_type": "min_area",
+      "layer": "met5",
+      "value_um": 4.000,
+      "description": "Min area of met5 (um^2)",
+      "severity": 5
+    }
+  ],
+  "connectivity": [
+    {
+      "via_layer": "licon1",
+      "lower_layer": "diff",
+      "upper_layer": "li1"
+    },
+    {
+      "via_layer": "licon1",
+      "lower_layer": "poly",
+      "upper_layer": "li1"
+    },
+    {
+      "via_layer": "mcon",
+      "lower_layer": "li1",
+      "upper_layer": "met1"
+    },
+    {
+      "via_layer": "via",
+      "lower_layer": "met1",
+      "upper_layer": "met2"
+    },
+    {
+      "via_layer": "via2",
+      "lower_layer": "met2",
+      "upper_layer": "met3"
+    },
+    {
+      "via_layer": "via3",
+      "lower_layer": "met3",
+      "upper_layer": "met4"
+    },
+    {
+      "via_layer": "via4",
+      "lower_layer": "met4",
+      "upper_layer": "met5"
+    }
+  ],
+  "fix_weights": {
+    "short": {
+      "enabled": true,
+      "priority": 1,
+      "prefer_move": true,
+      "max_iterations": 3
+    },
+    "off_grid": {
+      "enabled": true,
+      "priority": 2,
+      "prefer_move": false,
+      "max_iterations": 1
+    },
+    "min_width": {
+      "enabled": true,
+      "priority": 3,
+      "prefer_move": false,
+      "max_iterations": 3
+    },
+    "min_spacing": {
+      "enabled": true,
+      "priority": 4,
+      "prefer_move": true,
+      "max_iterations": 3
+    },
+    "min_enclosure": {
+      "enabled": true,
+      "priority": 5,
+      "prefer_move": false,
+      "max_iterations": 3
+    },
+    "min_area": {
+      "enabled": true,
+      "priority": 6,
+      "prefer_move": false,
+      "max_iterations": 3
+    }
+  }
+}

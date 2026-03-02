@@ -3,9 +3,26 @@
   "location": "/Users/claudesplayground/agentic-drc",
   "description": "Open-source DRC tool — PVS alternative for semiconductor layout verification",
   "current_phase": "Phase 1 - Core DRC Engine",
-  "current_story": null,
-  "status": "not_started",
+  "current_story": "P1-3: KLayout DRC runner",
+  "status": "in_progress",
   "sessions": [
+    {
+      "number": 2,
+      "date": "2026-03-02",
+      "title": "Phase 1 implementation (P1-1, P1-2)",
+      "completed": [
+        "Project scaffold (pyproject.toml, venv, deps, Makefile, directory structure)",
+        "P1-1: PDK config schema + SKY130 pdk.json (22 layers, 51 rules) — 30 tests",
+        "P1-2: GDSII layout manager + geometry_utils — 45 tests",
+        "75 total unit tests passing"
+      ],
+      "next": [
+        "Install KLayout CLI (brew install klayout)",
+        "Vendor SKY130 DRC deck (sky130A_mr.drc)",
+        "P1-3: KLayout DRC runner (subprocess batch mode)",
+        "P1-4: Violation parser (.lyrdb → Python objects)"
+      ]
+    },
     {
       "number": 1,
       "date": "2026-03-02",
@@ -36,6 +53,12 @@
   "key_files": {
     "plan": "~/.claude/plans/delegated-hopping-pixel.md",
     "progress": "~/agentic-drc/PROGRESS-agentic-drc.md",
-    "handoff": "~/agentic-drc/HANDOFF-agentic-drc.md"
-  }
+    "handoff": "~/agentic-drc/HANDOFF-agentic-drc.md",
+    "pdk_schema": "backend/pdk/schema.py",
+    "sky130_config": "backend/pdk/configs/sky130/pdk.json",
+    "layout_manager": "backend/core/layout.py",
+    "geometry_utils": "backend/core/geometry_utils.py"
+  },
+  "test_count": 75,
+  "test_status": "all_passing"
 }
