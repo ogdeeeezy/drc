@@ -4,33 +4,38 @@
 Open-source DRC (Design Rule Check) tool — PVS alternative for semiconductor layout verification. Deterministic rules-based expert system that checks GDSII layouts against PDK design rules, triages violations, and suggests geometric fixes.
 
 ## Current State
-- **Phase 1 (Core DRC Engine)**: 2 of 4 stories done (P1-1 PDK schema, P1-2 layout manager)
-- **75 unit tests**, all passing (`make test`)
+- **Phase 1 (Core DRC Engine)**: COMPLETE — 4/4 stories
+- **Phase 2 (Fix Suggestion Engine)**: COMPLETE — 5/5 stories
+- **214 unit tests**, all passing (`make test`)
 - Python 3.12 venv at `.venv/`, all deps installed
-- KLayout CLI NOT installed yet — needed for P1-3
+- KLayout CLI NOT installed yet — unit tests mock subprocess, integration tests will need it
 
-## Immediate Next Steps
-1. **Install KLayout CLI**: `brew install klayout` — needed for batch DRC subprocess
-2. **Vendor SKY130 DRC deck**: Get `sky130A_mr.drc` from `efabless/mpw_precheck` repo → `backend/pdk/configs/sky130/`
-3. **P1-3: KLayout DRC runner** — `backend/core/drc_runner.py`: subprocess wrapper for `klayout -b -r rules.drc`, temp file management, stdout/stderr capture, .lyrdb output path
-4. **P1-4: Violation parser** — `backend/core/violation_parser.py` + `violation_models.py`: parse .lyrdb XML into Python Violation objects, map violations to PDK rule IDs
+## Immediate Next Steps (Phase 3: Web API + Layout Viewer)
+1. **P3-1: FastAPI scaffold + upload/job endpoints** — `main.py`, `api/routes/upload.py`, `jobs/manager.py`
+2. **P3-2: DRC + violation API routes** — `api/routes/drc.py`, `jobs/worker.py`
+3. **P3-3: Fix suggestion + preview API** — `api/routes/fix.py`
+4. **P3-4: Layout geometry API + WebGL viewer** — `api/routes/layout.py`, `WebGLRenderer.ts`, `LayoutViewer.tsx`
+5. **P3-5: Violation overlay + fix panel UI** — `ViolationList.tsx`, `ViolationOverlay.tsx`, `FixPanel.tsx`
+
+Also still needed:
+- **Install KLayout CLI**: `brew install klayout` — for integration tests
+- **Vendor SKY130 DRC deck**: Get `sky130A_mr.drc` from efabless repo
 
 ## Key Architecture Decisions
-- **KLayout subprocess** for DRC (not reimplementing rules in Python) — uses community-tested SKY130 deck
-- **gdstk** for GDSII read/write/modify, **klayout.rdb** for .lyrdb violation parsing
-- **PDK-agnostic**: everything parameterized by `pdk.json` config — layer maps, rule thresholds, fix weights
-- **Fix priority**: shorts > off-grid > width > spacing > enclosure > area > density
-- **MVP is suggest-only** — auto-apply is Phase 4+
-
-## Context Needed
-- Plan file with full architecture: `~/.claude/plans/delegated-hopping-pixel.md`
-- SKY130 pdk.json has 22 layers, 51 rules — all from official SkyWater PDK docs
-- Manufacturing grid: 0.005um (5nm)
+- **KLayout subprocess** for DRC, custom XML parser for .lyrdb
+- **gdstk** for GDSII read/write/modify
+- **PDK-agnostic**: everything parameterized by `pdk.json`
+- **Fix priority**: shorts > off-grid > width > spacing > enclosure > area
+- **Fix strategies**: expand (width), move/shrink (spacing), extend metal (enclosure), extend wire (area), shrink overlap (short), conservative snap (offgrid)
+- **Pre-validation**: grid alignment, degenerate polygon, min width/area/spacing checks before suggesting
 
 ## Hot Files
-- `backend/pdk/schema.py` — PDK config Pydantic models (GDSLayer, DesignRule, PDKConfig)
-- `backend/pdk/configs/sky130/pdk.json` — Complete SKY130 config (22 layers, 51 rules, 7 connectivity entries)
-- `backend/pdk/registry.py` — PDK discovery and loading with caching
-- `backend/core/layout.py` — GDSII I/O via gdstk (load, save, flatten, modify polygons)
-- `backend/core/geometry_utils.py` — Grid snap, bbox, area, distance calculations
-- `backend/config.py` — App-level paths and defaults
+- `backend/pdk/schema.py` — PDK config models
+- `backend/core/drc_runner.py` — KLayout subprocess wrapper
+- `backend/core/violation_parser.py` — .lyrdb XML → DRCReport
+- `backend/core/violation_models.py` — EdgePair, Violation, DRCReport
+- `backend/core/spatial_index.py` — R-tree polygon lookups
+- `backend/fix/engine.py` — Fix orchestrator (strategies + validator + ranking)
+- `backend/fix/strategies/` — 6 strategies (width, spacing, enclosure, area, short, offgrid)
+- `backend/fix/validator.py` — Pre-validation of fix suggestions
+- `backend/fix/fix_models.py` — FixSuggestion, PolygonDelta
