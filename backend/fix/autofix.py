@@ -39,6 +39,32 @@ class AutoFixResult:
     fixes_flagged_count: int = 0
     stop_reason: str = ""
     iteration_history: list[IterationRecord] = field(default_factory=list)
+    oscillating_categories: list[str] = field(default_factory=list)
+
+
+def _extract_category_counts(report) -> dict[str, int]:
+    """Extract per-category violation counts from a DRC report."""
+    counts: dict[str, int] = {}
+    for v in report.violations:
+        counts[v.category] = v.violation_count
+    return counts
+
+
+def _detect_oscillation(category_history: dict[str, list[int]]) -> list[str]:
+    """Detect categories that oscillate (appear → disappear → reappear).
+
+    A category oscillates if its violation count goes N > 0 → 0 → M > 0
+    at any point in its history.
+    """
+    oscillating = []
+    for category, counts in category_history.items():
+        if len(counts) < 3:
+            continue
+        for i in range(len(counts) - 2):
+            if counts[i] > 0 and counts[i + 1] == 0 and counts[i + 2] > 0:
+                oscillating.append(category)
+                break
+    return sorted(oscillating)
 
 
 def _is_auto_applicable(
@@ -218,6 +244,17 @@ class AutoFixRunner:
             result.stop_reason = "no_drc_report"
             return result
 
+        # Track per-category violation counts across iterations for oscillation detection
+        # Key = category name, Value = list of counts (one per iteration)
+        category_history: dict[str, list[int]] = {}
+
+        # Seed iteration 0 from the initial report
+        initial_report = parser.parse_file(report_path)
+        initial_counts = _extract_category_counts(initial_report)
+        all_categories: set[str] = set(initial_counts.keys())
+        for cat, count in initial_counts.items():
+            category_history[cat] = [count]
+
         for iteration_num in range(1, max_iterations + 1):
             logger.info(
                 "Auto-fix iteration %d: %d violations, gds=%s",
@@ -363,6 +400,14 @@ class AutoFixRunner:
                 total_violations=new_violation_count,
             )
 
+            # Track per-category violation counts for oscillation detection
+            new_counts = _extract_category_counts(drc_result.report)
+            all_categories.update(new_counts.keys())
+            for cat in all_categories:
+                if cat not in category_history:
+                    category_history[cat] = [0] * iteration_num
+                category_history[cat].append(new_counts.get(cat, 0))
+
             # Record iteration
             result.iteration_history.append(
                 IterationRecord(
@@ -390,6 +435,16 @@ class AutoFixRunner:
             # Check regression: violation count increased
             if new_violation_count > previous_violations:
                 result.stop_reason = "regression"
+                break
+
+            # Check oscillation: category appears → disappears → reappears
+            oscillating = _detect_oscillation(category_history)
+            if oscillating:
+                result.stop_reason = "oscillation"
+                result.oscillating_categories = oscillating
+                logger.warning(
+                    "Oscillation detected in categories: %s", oscillating
+                )
                 break
 
         else:

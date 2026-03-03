@@ -7,7 +7,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from backend.core.drc_runner import DRCError, DRCResult
-from backend.fix.autofix import AutoFixRunner, _flag_reason, _is_auto_applicable
+from backend.fix.autofix import (
+    AutoFixRunner,
+    _detect_oscillation,
+    _flag_reason,
+    _is_auto_applicable,
+)
 from backend.fix.fix_models import FixConfidence, FixSuggestion, PolygonDelta
 from backend.jobs.manager import JobManager, JobStatus
 
@@ -600,6 +605,243 @@ class TestAutoFixRunner:
 
         assert result.stop_reason == "no_suggestions"
         assert result.iterations_run == 0
+
+
+# ── Oscillation detection unit tests ─────────────────────
+
+
+class TestDetectOscillation:
+    def test_no_oscillation_steady_decrease(self):
+        history = {"m1.1": [3, 2, 1, 0]}
+        assert _detect_oscillation(history) == []
+
+    def test_no_oscillation_too_short(self):
+        history = {"m1.1": [3, 0]}
+        assert _detect_oscillation(history) == []
+
+    def test_oscillation_basic(self):
+        """N > 0 → 0 → M > 0 pattern."""
+        history = {"m1.1": [3, 0, 2]}
+        assert _detect_oscillation(history) == ["m1.1"]
+
+    def test_oscillation_later_in_history(self):
+        """Oscillation detected even if it starts later."""
+        history = {"m1.1": [5, 3, 0, 2]}
+        assert _detect_oscillation(history) == ["m1.1"]
+
+    def test_multiple_categories_oscillating(self):
+        history = {
+            "m1.1": [3, 0, 2],
+            "m1.2": [1, 0, 1],
+            "m1.3": [2, 1, 0],  # not oscillating
+        }
+        assert _detect_oscillation(history) == ["m1.1", "m1.2"]
+
+    def test_no_oscillation_stays_zero(self):
+        history = {"m1.1": [3, 0, 0, 0]}
+        assert _detect_oscillation(history) == []
+
+    def test_no_oscillation_monotonic_increase(self):
+        history = {"m1.1": [1, 2, 3]}
+        assert _detect_oscillation(history) == []
+
+
+# ── Oscillation and regression loop tests ────────────────
+
+
+class TestAutoFixOscillation:
+    async def test_oscillation_stops_loop(self, manager, pdk, job_with_drc, tmp_dir):
+        """Mock DRC that oscillates width violations → loop stops with oscillation."""
+        job = job_with_drc
+        job_dir = manager.job_dir(job.job_id)
+
+        suggestions = [_make_suggestion(FixConfidence.high)]
+        from backend.fix.engine import FixEngineResult
+
+        fix_result = FixEngineResult(suggestions=suggestions)
+
+        # DRC results cycle: iter1 → 0 violations, iter2 → 3 violations (oscillation)
+        report_clean = job_dir / "clean_drc.lyrdb"
+        drc_clean = _make_drc_result(report_clean, 0)
+
+        report_back = job_dir / "back_drc.lyrdb"
+        drc_back = _make_drc_result(report_back, 3, ["met1.1", "met1.1", "met1.1"])
+
+        call_count = 0
+
+        async def mock_drc(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return drc_clean
+            else:
+                return drc_back
+
+        with (
+            patch("backend.fix.autofix.FixEngine") as MockEngine,
+            patch("backend.fix.autofix.DRCRunner") as MockDRCRunner,
+            patch("backend.fix.autofix.LayoutManager"),
+            patch("backend.fix.autofix.SpatialIndex"),
+            patch("backend.fix.autofix.export_fixed_gds") as mock_export,
+            patch("backend.fix.autofix._apply_deltas_from_suggestions", return_value=1),
+            patch("backend.fix.autofix.ViolationParser") as MockParser,
+        ):
+            MockEngine.return_value.suggest_fixes.return_value = fix_result
+            MockDRCRunner.return_value.async_run = AsyncMock(side_effect=mock_drc)
+            mock_export.return_value = job_dir / "test_fixed.gds"
+            (job_dir / "test_fixed.gds").write_bytes(b"fake")
+
+            # Mock the parser for iteration 2+ (iteration 1 sees drc_clean and stops early
+            # unless we simulate oscillation properly)
+            # The initial report has met1.1 violations. After iter1 DRC → clean (0).
+            # After iter2 DRC → 3 met1.1 violations (oscillation: 3 → 0 → 3)
+            mock_report = MagicMock()
+            mock_report.violations = [
+                MagicMock(category="met1.1", description="Test", violation_count=3)
+            ]
+            mock_report.total_violations = 3
+            MockParser.return_value.parse_file.return_value = mock_report
+            MockParser.return_value.map_to_pdk.return_value = None
+
+            # But we need the *initial* parse to return the real report (3 met1.1 violations).
+            # The initial parse happens before the loop. Then DRC returns clean, but
+            # the loop stops on drc_clean. To test oscillation we need 3+ iterations.
+            # Let's simulate: initial=3, iter1 DRC=2 (still has violations), iter2 DRC=0, iter3 DRC=2 (oscillation)
+
+            # Re-approach: make DRC always return violations that oscillate
+            report_2v = job_dir / "drc_2v.lyrdb"
+            drc_2v = _make_drc_result(report_2v, 2, ["met1.1", "met1.1"])
+            report_0v = job_dir / "drc_0v_cat.lyrdb"
+            drc_0v = _make_drc_result(report_0v, 2, ["met1.2", "met1.2"])
+            report_2v_again = job_dir / "drc_2v_again.lyrdb"
+            drc_2v_again = _make_drc_result(
+                report_2v_again, 2, ["met1.1", "met1.1"]
+            )
+
+            call_count = 0
+
+            async def mock_drc_oscillate(*args, **kwargs):
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    return drc_2v  # met1.1: 2 violations
+                elif call_count == 2:
+                    return drc_0v  # met1.2: 2 violations, met1.1: 0
+                else:
+                    return drc_2v_again  # met1.1: 2 violations (oscillation!)
+
+            MockDRCRunner.return_value.async_run = AsyncMock(
+                side_effect=mock_drc_oscillate
+            )
+
+            runner = AutoFixRunner(manager, pdk, job)
+            result = await runner.run(confidence_threshold="high", max_iterations=10)
+
+        assert result.stop_reason == "oscillation"
+        assert "met1.1" in result.oscillating_categories
+        assert result.iterations_run == 3
+
+    async def test_regression_with_before_after_counts(
+        self, manager, pdk, job_with_drc, tmp_dir
+    ):
+        """Loop stops when violations increase, with before/after in history."""
+        job = job_with_drc
+        job_dir = manager.job_dir(job.job_id)
+
+        suggestions = [_make_suggestion(FixConfidence.high)]
+        from backend.fix.engine import FixEngineResult
+
+        fix_result = FixEngineResult(suggestions=suggestions)
+
+        # DRC returns MORE violations (5 > 3 initial)
+        report_path = job_dir / "worse_drc.lyrdb"
+        drc_result = _make_drc_result(report_path, 5)
+
+        with (
+            patch("backend.fix.autofix.FixEngine") as MockEngine,
+            patch("backend.fix.autofix.DRCRunner") as MockDRCRunner,
+            patch("backend.fix.autofix.LayoutManager"),
+            patch("backend.fix.autofix.SpatialIndex"),
+            patch("backend.fix.autofix.export_fixed_gds") as mock_export,
+            patch("backend.fix.autofix._apply_deltas_from_suggestions", return_value=1),
+        ):
+            MockEngine.return_value.suggest_fixes.return_value = fix_result
+            MockDRCRunner.return_value.async_run = AsyncMock(return_value=drc_result)
+            mock_export.return_value = job_dir / "test_fixed.gds"
+            (job_dir / "test_fixed.gds").write_bytes(b"fake")
+
+            runner = AutoFixRunner(manager, pdk, job)
+            result = await runner.run(confidence_threshold="high", max_iterations=10)
+
+        assert result.stop_reason == "regression"
+        assert result.iterations_run == 1
+        assert result.final_violation_count == 5
+        # Iteration history captures before/after
+        assert len(result.iteration_history) == 1
+        assert result.iteration_history[0].total_violations == 5
+
+    async def test_stall_detected_zero_auto_applied(
+        self, manager, pdk, job_with_drc, tmp_dir
+    ):
+        """Stall: all fixes flagged, none applicable → stop with stall."""
+        job = job_with_drc
+
+        suggestions = [
+            _make_suggestion(FixConfidence.low),
+            _make_suggestion(FixConfidence.low),
+        ]
+        from backend.fix.engine import FixEngineResult
+
+        fix_result = FixEngineResult(suggestions=suggestions)
+
+        with (
+            patch("backend.fix.autofix.FixEngine") as MockEngine,
+            patch("backend.fix.autofix.LayoutManager"),
+            patch("backend.fix.autofix.SpatialIndex"),
+        ):
+            MockEngine.return_value.suggest_fixes.return_value = fix_result
+
+            runner = AutoFixRunner(manager, pdk, job)
+            result = await runner.run(confidence_threshold="high", max_iterations=10)
+
+        assert result.stop_reason == "stall"
+        assert result.fixes_applied_count == 0
+        assert result.fixes_flagged_count == 2
+        assert len(result.iteration_history) == 1
+        assert result.iteration_history[0].applied_count == 0
+        assert result.iteration_history[0].flagged_count == 2
+
+    async def test_no_oscillation_when_clean(self, manager, pdk, job_with_drc, tmp_dir):
+        """No oscillation reported when loop stops due to clean DRC."""
+        job = job_with_drc
+        job_dir = manager.job_dir(job.job_id)
+
+        suggestions = [_make_suggestion(FixConfidence.high) for _ in range(3)]
+        from backend.fix.engine import FixEngineResult
+
+        fix_result = FixEngineResult(suggestions=suggestions)
+
+        clean_report_path = job_dir / "clean_drc.lyrdb"
+        clean_drc_result = _make_drc_result(clean_report_path, 0)
+
+        with (
+            patch("backend.fix.autofix.FixEngine") as MockEngine,
+            patch("backend.fix.autofix.DRCRunner") as MockDRCRunner,
+            patch("backend.fix.autofix.LayoutManager"),
+            patch("backend.fix.autofix.SpatialIndex"),
+            patch("backend.fix.autofix.export_fixed_gds") as mock_export,
+            patch("backend.fix.autofix._apply_deltas_from_suggestions", return_value=3),
+        ):
+            MockEngine.return_value.suggest_fixes.return_value = fix_result
+            MockDRCRunner.return_value.async_run = AsyncMock(return_value=clean_drc_result)
+            mock_export.return_value = job_dir / "test_fixed.gds"
+            (job_dir / "test_fixed.gds").write_bytes(b"fake")
+
+            runner = AutoFixRunner(manager, pdk, job)
+            result = await runner.run(confidence_threshold="high", max_iterations=10)
+
+        assert result.stop_reason == "drc_clean"
+        assert result.oscillating_categories == []
 
 
 # ── API Route test ────────────────────────────────────────

@@ -457,6 +457,7 @@ async def auto_fix(job_id: str, request: AutoFixRequest):
         "fixes_applied_count": result.fixes_applied_count,
         "fixes_flagged_count": result.fixes_flagged_count,
         "stop_reason": result.stop_reason,
+        "oscillating_categories": result.oscillating_categories,
         "iteration_history": [
             {
                 "iteration": rec.iteration,
