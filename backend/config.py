@@ -10,6 +10,7 @@ BACKEND_DIR = Path(__file__).parent
 PDK_CONFIGS_DIR = BACKEND_DIR / "pdk" / "configs"
 UPLOAD_DIR = PROJECT_ROOT / "data" / "uploads"
 JOBS_DIR = PROJECT_ROOT / "data" / "jobs"
+PCELLS_DIR = PROJECT_ROOT / "data" / "pcells"
 DATABASE_PATH = JOBS_DIR / "jobs.db"
 
 
