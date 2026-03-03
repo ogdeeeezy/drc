@@ -138,6 +138,10 @@ class JobManager:
         """Get provenance records for a job."""
         return self._db.get_provenance(job_id, iteration=iteration, action=action)
 
+    def get_provenance_by_ids(self, provenance_ids: list[int]) -> list[dict]:
+        """Get provenance records by their IDs."""
+        return self._db.get_provenance_by_ids(provenance_ids)
+
     def update_provenance_action(self, provenance_id: int, new_action: str) -> None:
         """Update the action field on a provenance record."""
         self._db.update_provenance_action(provenance_id, new_action)

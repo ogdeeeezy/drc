@@ -193,6 +193,24 @@ class Database:
             result.append(d)
         return result
 
+    def get_provenance_by_ids(self, provenance_ids: list[int]) -> list[dict]:
+        """Get provenance records by their IDs."""
+        if not provenance_ids:
+            return []
+        conn = self._get_conn()
+        placeholders = ", ".join("?" for _ in provenance_ids)
+        rows = conn.execute(
+            f"SELECT * FROM fix_provenance WHERE id IN ({placeholders})",
+            provenance_ids,
+        ).fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["before_points"] = json.loads(d["before_points"])
+            d["after_points"] = json.loads(d["after_points"])
+            result.append(d)
+        return result
+
     def update_provenance_action(
         self, provenance_id: int, new_action: str
     ) -> None:
