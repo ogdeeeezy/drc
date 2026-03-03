@@ -21,7 +21,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     top_cell TEXT,
     total_violations INTEGER DEFAULT 0,
     error TEXT,
-    iteration INTEGER DEFAULT 1
+    iteration INTEGER DEFAULT 1,
+    netlist_path TEXT,
+    lvs_report_path TEXT
 )
 """
 
@@ -59,6 +61,8 @@ JOB_COLUMNS = (
     "total_violations",
     "error",
     "iteration",
+    "netlist_path",
+    "lvs_report_path",
 )
 
 

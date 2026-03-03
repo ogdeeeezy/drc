@@ -21,6 +21,9 @@ class JobStatus(str, Enum):
     drc_failed = "drc_failed"
     fixing = "fixing"
     fixes_applied = "fixes_applied"
+    running_lvs = "running_lvs"
+    lvs_complete = "lvs_complete"
+    lvs_failed = "lvs_failed"
     complete = "complete"
 
 
@@ -40,6 +43,8 @@ class Job:
     total_violations: int = 0
     error: str | None = None
     iteration: int = 1
+    netlist_path: str | None = None
+    lvs_report_path: str | None = None
 
     def to_dict(self) -> dict:
         d = asdict(self)
