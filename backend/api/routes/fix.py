@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.api.deps import get_job_manager, get_pdk_registry
 from backend.core.drc_runner import DRCError, DRCRunner
@@ -13,6 +14,7 @@ from backend.core.layout import LayoutManager
 from backend.core.spatial_index import SpatialIndex
 from backend.core.violation_parser import ViolationParser
 from backend.export.gdsii import export_fixed_gds
+from backend.fix.autofix import AutoFixRunner
 from backend.fix.engine import FixEngine, FixEngineResult
 from backend.jobs.manager import JobStatus
 
@@ -29,6 +31,11 @@ def clear_fix_cache(job_id: str) -> None:
 
 class ApplyFixRequest(BaseModel):
     suggestion_indices: list[int]
+
+
+class AutoFixRequest(BaseModel):
+    confidence_threshold: Literal["high", "medium"] = "high"
+    max_iterations: int = Field(default=10, ge=1, le=50)
 
 
 @router.post("/{job_id}/fix/suggest")
@@ -365,3 +372,52 @@ def _points_match(
     return all(
         abs(p1[0] - p2[0]) < tolerance and abs(p1[1] - p2[1]) < tolerance for p1, p2 in zip(a, b)
     )
+
+
+@router.post("/{job_id}/fix/auto")
+async def auto_fix(job_id: str, request: AutoFixRequest):
+    """Automatically loop: suggest → filter by confidence → apply → re-DRC → repeat.
+
+    Stops when DRC-clean, stalled (no applicable fixes), regression, or max iterations.
+    """
+    manager = get_job_manager()
+    try:
+        job = manager.get(job_id)
+    except KeyError:
+        raise HTTPException(404, f"Job '{job_id}' not found")
+
+    if job.gds_path is None:
+        raise HTTPException(400, "No GDSII file for this job.")
+    if job.report_path is None:
+        raise HTTPException(400, "No DRC report available. Run DRC first.")
+
+    # Load PDK
+    registry = get_pdk_registry()
+    try:
+        pdk = registry.load(job.pdk_name)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+
+    runner = AutoFixRunner(manager, pdk, job)
+    result = await runner.run(
+        confidence_threshold=request.confidence_threshold,
+        max_iterations=request.max_iterations,
+    )
+
+    return {
+        "job_id": job_id,
+        "iterations_run": result.iterations_run,
+        "final_violation_count": result.final_violation_count,
+        "fixes_applied_count": result.fixes_applied_count,
+        "fixes_flagged_count": result.fixes_flagged_count,
+        "stop_reason": result.stop_reason,
+        "iteration_history": [
+            {
+                "iteration": rec.iteration,
+                "total_violations": rec.total_violations,
+                "applied_count": rec.applied_count,
+                "flagged_count": rec.flagged_count,
+            }
+            for rec in result.iteration_history
+        ],
+    }
