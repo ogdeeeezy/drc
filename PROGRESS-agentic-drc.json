@@ -2,63 +2,80 @@
   "project": "agentic-drc",
   "location": "/Users/claudesplayground/agentic-drc",
   "description": "Open-source DRC tool — PVS alternative for semiconductor layout verification",
-  "current_phase": "Phase 1 - Core DRC Engine",
-  "current_story": "P1-3: KLayout DRC runner",
-  "status": "in_progress",
+  "current_phase": "Post-Phase 4 — Integration Testing & Polish",
+  "current_story": null,
+  "status": "between_stories",
   "sessions": [
     {
-      "number": 2,
-      "date": "2026-03-02",
-      "title": "Phase 1 implementation (P1-1, P1-2)",
+      "number": 7,
+      "date": "2026-03-03",
+      "title": "KLayout integration, e2e tests, memory profiling, DRC flag fix",
       "completed": [
-        "Project scaffold (pyproject.toml, venv, deps, Makefile, directory structure)",
-        "P1-1: PDK config schema + SKY130 pdk.json (22 layers, 51 rules) — 30 tests",
-        "P1-2: GDSII layout manager + geometry_utils — 45 tests",
-        "75 total unit tests passing"
+        "KLayout CLI confirmed working (macOS app bundle auto-detected)",
+        "Fixed latent bug: DRC deck disabled all rule groups by default — added DEFAULT_DRC_FLAGS",
+        "8 e2e integration tests with real KLayout (clean/violating/multi-layer GDS, PDK mapping, adaptive strategy)",
+        "9 memory profiling tests (RSS measurement, scaling estimates ~64 bytes/poly, 2GB guard)",
+        "Vendored SKY130 DRC deck (git tracked)",
+        "Fixed 4 unit tests that assumed KLayout absent",
+        "303 total tests (286 unit + 17 integration) all passing"
       ],
       "next": [
-        "Install KLayout CLI (brew install klayout)",
-        "Vendor SKY130 DRC deck (sky130A_mr.drc)",
-        "P1-3: KLayout DRC runner (subprocess batch mode)",
-        "P1-4: Violation parser (.lyrdb → Python objects)"
+        "PDK authoring guide (docs/pdk-authoring.md)",
+        "Async DRC execution",
+        "Additional PDKs (GF180, ASAP7)",
+        "GitHub remote + CI"
       ]
     },
     {
-      "number": 1,
-      "date": "2026-03-02",
-      "title": "Architecture & plan",
+      "number": 6,
+      "date": "2026-03-03",
+      "title": "Adaptive DRC for resource-constrained environments",
       "completed": [
-        "Requirements gathering and scope definition",
-        "Landscape research (KLayout, Magic, OpenROAD, gdstk, SKY130)",
-        "Full architecture design with PDK-agnostic config system",
-        "Fix strategy research for 6 violation types",
-        "4-phase, 19-story implementation plan"
+        "Adaptive DRC strategy — auto-selects threads/mode by GDS file size",
+        "Conditional tiling in sky130A_mr.drc",
+        "API response includes strategy info",
+        "12 new tests — all passing"
       ],
       "next": [
-        "Set up Python project (pyproject.toml, venv, deps)",
-        "P1-1: PDK config schema + SKY130 pdk.json",
-        "P1-2: GDSII layout manager",
-        "P1-3: KLayout DRC runner",
-        "P1-4: Violation parser"
+        "Integration tests with real KLayout",
+        "Memory profiling",
+        "Vendor DRC deck"
+      ]
+    },
+    {
+      "number": 5,
+      "date": "2026-03-02",
+      "title": "Phase 4 complete (Production Hardening)",
+      "completed": [
+        "P4-1 through P4-5 all complete",
+        "SQLite job persistence (WAL mode)",
+        "Report export (JSON/CSV/HTML)",
+        "Docker + CI/CD",
+        "Density fill strategy",
+        "273 unit tests total"
+      ],
+      "next": [
+        "Install KLayout CLI for integration tests",
+        "Vendor SKY130 DRC deck"
       ]
     }
   ],
   "tech_stack": {
     "backend": "Python 3.12, FastAPI, gdstk, klayout, pydantic",
     "frontend": "React, TypeScript, Vite, WebGL",
-    "drc_engine": "KLayout batch mode",
+    "drc_engine": "KLayout batch mode (macOS app bundle)",
     "storage": "SQLite, filesystem",
     "deployment": "Docker"
   },
   "key_files": {
-    "plan": "~/.claude/plans/delegated-hopping-pixel.md",
     "progress": "~/agentic-drc/PROGRESS-agentic-drc.md",
     "handoff": "~/agentic-drc/HANDOFF-agentic-drc.md",
-    "pdk_schema": "backend/pdk/schema.py",
-    "sky130_config": "backend/pdk/configs/sky130/pdk.json",
-    "layout_manager": "backend/core/layout.py",
-    "geometry_utils": "backend/core/geometry_utils.py"
+    "config": "backend/config.py",
+    "drc_runner": "backend/core/drc_runner.py",
+    "sky130_drc_deck": "backend/pdk/configs/sky130/sky130A_mr.drc",
+    "e2e_tests": "tests/integration/test_e2e_drc.py",
+    "memory_tests": "tests/integration/test_memory_profiling.py"
   },
-  "test_count": 75,
+  "test_count": 303,
   "test_status": "all_passing"
 }

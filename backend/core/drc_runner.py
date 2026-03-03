@@ -9,7 +9,15 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from backend.config import DRC_TIMEOUT_SECONDS, KLAYOUT_BINARY, PDK_CONFIGS_DIR
+from backend.config import (
+    DRC_LARGE_THRESHOLD,
+    DRC_SMALL_THRESHOLD,
+    DRC_TILE_SIZE_UM,
+    DRC_TIMEOUT_SECONDS,
+    KLAYOUT_BINARY,
+    PDK_CONFIGS_DIR,
+    DRCStrategy,
+)
 from backend.core.violation_models import DRCReport
 from backend.core.violation_parser import ViolationParser
 from backend.pdk.schema import PDKConfig
@@ -35,6 +43,7 @@ class DRCResult:
     stderr: str
     duration_seconds: float
     klayout_binary: str
+    strategy: DRCStrategy | None = None
 
     @property
     def has_violations(self) -> bool:
@@ -70,8 +79,26 @@ class DRCRunner:
         return self._binary
 
     def check_klayout_available(self) -> bool:
-        """Check if KLayout binary is available on PATH."""
+        """Check if KLayout binary is available."""
+        if Path(self._binary).is_absolute():
+            return Path(self._binary).exists()
         return shutil.which(self._binary) is not None
+
+    @staticmethod
+    def adaptive_strategy(file_size_bytes: int) -> DRCStrategy:
+        """Select DRC execution strategy based on GDS file size.
+
+        | File Size | Threads | Mode                |
+        |-----------|---------|---------------------|
+        | < 20 MB   | 4       | deep                |
+        | 20-80 MB  | 2       | deep                |
+        | > 80 MB   | 1       | tiled (1000 µm)     |
+        """
+        if file_size_bytes < DRC_SMALL_THRESHOLD:
+            return DRCStrategy(threads=4, mode="deep")
+        if file_size_bytes < DRC_LARGE_THRESHOLD:
+            return DRCStrategy(threads=2, mode="deep")
+        return DRCStrategy(threads=1, mode="tiled", tile_size_um=DRC_TILE_SIZE_UM)
 
     def get_drc_deck_path(self, pdk: PDKConfig) -> Path:
         """Resolve the DRC deck file path for a PDK."""
@@ -84,17 +111,31 @@ class DRCRunner:
             )
         return deck_path
 
+    # SKY130 DRC deck defaults all rule groups to "false" — we enable them since
+    # the whole point of this tool is to run all checks.
+    DEFAULT_DRC_FLAGS: dict[str, str] = {
+        "feol": "true",
+        "beol": "true",
+        "offgrid": "true",
+        "floating_met": "true",
+        "seal": "false",
+    }
+
     def build_command(
         self,
         gds_path: Path,
         drc_deck_path: Path,
         report_path: Path,
         top_cell: str | None = None,
+        strategy: DRCStrategy | None = None,
+        drc_flags: dict[str, str] | None = None,
     ) -> list[str]:
         """Build the klayout batch command.
 
         Command format:
-            klayout -b -r <deck.drc> -rd input=<gds> -rd report=<report.lyrdb> [-rd topcell=<name>]
+            klayout -b -r <deck.drc> -rd input=<gds> -rd report=<report.lyrdb>
+                    [-rd topcell=<name>] [-rd thr=<n>] [-rd drc_mode=<mode>]
+                    [-rd tile_size=<um>] [-rd feol=true] ...
         """
         cmd = [
             self._binary,
@@ -108,6 +149,15 @@ class DRCRunner:
         ]
         if top_cell:
             cmd.extend(["-rd", f"topcell={top_cell}"])
+        if strategy:
+            cmd.extend(["-rd", f"thr={strategy.threads}"])
+            cmd.extend(["-rd", f"drc_mode={strategy.mode}"])
+            if strategy.mode == "tiled" and strategy.tile_size_um is not None:
+                cmd.extend(["-rd", f"tile_size={strategy.tile_size_um}"])
+        # Enable DRC rule groups (deck defaults all to false)
+        flags = {**self.DEFAULT_DRC_FLAGS, **(drc_flags or {})}
+        for key, val in flags.items():
+            cmd.extend(["-rd", f"{key}={val}"])
         return cmd
 
     def run(
@@ -146,6 +196,9 @@ class DRCRunner:
 
         drc_deck_path = self.get_drc_deck_path(pdk)
 
+        # Select adaptive strategy based on file size
+        strategy = self.adaptive_strategy(gds_path.stat().st_size)
+
         # Set up output directory
         use_temp = output_dir is None
         if use_temp:
@@ -157,7 +210,7 @@ class DRCRunner:
 
         report_path = out_dir / f"{gds_path.stem}_drc.lyrdb"
 
-        cmd = self.build_command(gds_path, drc_deck_path, report_path, top_cell)
+        cmd = self.build_command(gds_path, drc_deck_path, report_path, top_cell, strategy)
 
         start_time = time.monotonic()
         try:
@@ -210,4 +263,5 @@ class DRCRunner:
             stderr=proc.stderr,
             duration_seconds=duration,
             klayout_binary=self._binary,
+            strategy=strategy,
         )

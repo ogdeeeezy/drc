@@ -78,7 +78,7 @@ async def run_drc(job_id: str, top_cell: str | None = None):
         total_violations=result.report.total_violations,
     )
 
-    return {
+    response = {
         "job_id": job_id,
         "status": "drc_complete",
         "total_violations": result.report.total_violations,
@@ -94,6 +94,13 @@ async def run_drc(job_id: str, top_cell: str | None = None):
             for v in result.report.violations
         ],
     }
+    if result.strategy:
+        response["strategy"] = {
+            "mode": result.strategy.mode,
+            "threads": result.strategy.threads,
+            "tile_size_um": result.strategy.tile_size_um,
+        }
+    return response
 
 
 @router.get("/{job_id}/violations")

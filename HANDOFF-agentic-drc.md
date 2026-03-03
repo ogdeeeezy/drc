@@ -4,50 +4,41 @@
 Open-source DRC (Design Rule Check) tool — PVS alternative for semiconductor layout verification. Deterministic rules-based expert system that checks GDSII layouts against PDK design rules, triages violations, and suggests geometric fixes.
 
 ## Current State
-- **Phase 1 (Core DRC Engine)**: COMPLETE — 4/4 stories
-- **Phase 2 (Fix Suggestion Engine)**: COMPLETE — 5/5 stories
-- **Phase 3 (Web API + Layout Viewer)**: COMPLETE — 5/5 stories
-- **Phase 4 (Production Hardening)**: COMPLETE — 5/5 stories
-- **273 unit tests**, all passing (`make test`)
+- **Phases 1-4**: ALL COMPLETE (19/19 stories)
+- **Adaptive DRC**: COMPLETE — auto-selects threads/mode by GDS file size
+- **KLayout integration**: WORKING — macOS app bundle auto-detected
+- **303 tests** (286 unit + 17 integration), all passing
 - **Frontend builds clean** (`cd frontend && npm run build`)
-- **Lint clean** (`make lint`)
 - Python 3.12 venv at `.venv/`, all deps installed
-- KLayout CLI NOT installed yet — unit tests mock subprocess, integration tests will need it
 
 ## How to Run
 - Backend: `make run` (uvicorn on port 8000)
-- Frontend: `make frontend` (Vite dev server on port 5173, proxies /api to backend)
-- Tests: `make test`
+- Frontend: `make frontend` (Vite dev on 5173, proxies /api)
+- Unit tests: `make test` | All tests: `make test-all`
 - Docker: `docker compose up --build`
 
-## Key Architecture Decisions
-- **KLayout subprocess** for DRC, custom XML parser for .lyrdb
-- **gdstk** for GDSII read/write/modify
-- **PDK-agnostic**: everything parameterized by `pdk.json`
+## Key Architecture
+- **KLayout subprocess** for DRC — default flags enable feol/beol/offgrid/floating_met
+- **Adaptive DRC**: <20MB=4t deep, 20-80MB=2t deep, >80MB=1t tiled(1000µm)
+- **gdstk** for GDSII I/O, **pdk.json** for PDK-agnostic config
 - **Fix priority**: shorts > off-grid > width > spacing > enclosure > area > density
-- **SQLite persistence**: `data/jobs/jobs.db` (WAL mode, thread-safe)
-- **WebGL viewer**: earcut triangulation, camera transform shaders, pan/zoom
-- **Fix preview**: SVG-based before/after polygon diff
-- **Re-DRC loop**: apply fixes → re-run DRC → increment iteration → repeat until clean
-- **Report export**: JSON, CSV, HTML formats via `/api/jobs/{id}/report/{format}`
-- **Docker**: multi-stage build (Python + KLayout + frontend)
+- **SQLite WAL** for job persistence, versioned GDS export
+- **Memory**: ~64 bytes/polygon in GDS, KLayout stays <2GB RSS in tests
 
 ## Hot Files
-- `backend/main.py` — FastAPI app with all route registrations
-- `backend/api/deps.py` — Singleton managers
-- `backend/jobs/manager.py` — Job lifecycle (SQLite persistence)
-- `backend/jobs/database.py` — SQLite database backend
-- `backend/api/routes/fix.py` — Fix suggest/preview/apply + re-DRC loop
-- `backend/api/routes/drc.py` — DRC trigger + violation retrieval
-- `backend/api/routes/export.py` — Report download (JSON/CSV/HTML)
-- `backend/export/report.py` — Report generation
-- `backend/export/gdsii.py` — Versioned GDSII export
-- `backend/fix/engine.py` — Fix orchestrator (7 strategies)
-- `backend/fix/strategies/density.py` — Density fill strategy
-- `frontend/src/api/client.ts` — Typed API client
+- `backend/core/drc_runner.py` — DRC runner, adaptive_strategy(), DEFAULT_DRC_FLAGS
+- `backend/config.py` — DRCStrategy dataclass, thresholds, _find_klayout()
+- `backend/pdk/configs/sky130/sky130A_mr.drc` — SKY130 DRC deck (vendored, tracked)
+- `tests/integration/test_e2e_drc.py` — 8 e2e tests with real KLayout
+- `tests/integration/test_memory_profiling.py` — 9 memory profiling tests
+
+## Gotchas
+- SKY130 DRC deck defaults ALL rule groups to disabled — `DEFAULT_DRC_FLAGS` in drc_runner.py fixes this
+- KLayout macOS app bundle needs Gatekeeper bypass: `sudo xattr -r -d com.apple.quarantine /Applications/KLayout/klayout.app`
+- No GitHub remote configured yet — local repo only
 
 ## What's Left
-- Install KLayout CLI for integration tests (`brew install klayout`)
-- Vendor SKY130 DRC deck (`sky130A_mr.drc` from efabless repo)
-- Integration tests with real KLayout
-- PDK authoring documentation (`docs/pdk-authoring.md`)
+- PDK authoring guide (`docs/pdk-authoring.md`)
+- Async DRC execution (currently blocks API thread)
+- Additional PDKs (GF180, ASAP7)
+- GitHub remote + CI pipeline setup

@@ -1,78 +1,63 @@
 # PROGRESS-agentic-drc
 
-> Sessions 1-2 archived → `docs/archive/archive-progress-agentic-drc.md`
+> Sessions 1-4 archived → `docs/archive/archive-progress-agentic-drc.md`
+
+---
+
+## Session 7: 2026-03-03 — KLayout integration, e2e tests, memory profiling, DRC flag fix
+
+### Done
+- **KLayout CLI confirmed** — Already installed at macOS app bundle, `_find_klayout()` auto-detects. Fixed 4 pre-existing unit tests that assumed KLayout was absent.
+- **Latent DRC bug fixed** — SKY130 deck defaults all rule groups (feol/beol/offgrid) to disabled. Added `DEFAULT_DRC_FLAGS` dict to `DRCRunner.build_command()` so checks actually run. Configurable via `drc_flags` parameter.
+- **E2E integration tests** — 8 tests in `tests/integration/test_e2e_drc.py`: clean/violating/multi-layer GDS, PDK mapping, adaptive strategy. All pass against real KLayout.
+- **Memory profiling tests** — 9 tests in `tests/integration/test_memory_profiling.py`: RSS measurement across 10→20k polygon files, scaling data (~64 bytes/poly), 2GB budget guard.
+- **Vendored SKY130 DRC deck** — `git add backend/pdk/configs/sky130/sky130A_mr.drc`, now tracked.
+- **303 total tests** (286 unit + 17 integration), all passing. Lint clean.
+
+### Decisions
+- DRC runner enables feol/beol/offgrid/floating_met by default (overridable via `drc_flags` kwarg)
+- Unit tests use explicit `klayout_binary=` arg to avoid depending on install state
+- Memory profiling uses `resource.RUSAGE_CHILDREN` (peak RSS of subprocess), not parent process
+
+### Next
+- Write PDK authoring guide (`docs/pdk-authoring.md`)
+- Consider async DRC execution (currently sync, blocks API thread)
+- Add more PDKs beyond SKY130 (GF180, ASAP7)
+- GitHub remote + CI setup
+
+---
+
+## Session 6: 2026-03-03 — Adaptive DRC for resource-constrained environments
+
+### Done
+- **Adaptive DRC strategy** — Auto-selects thread count and DRC mode (deep vs tiled) based on GDS file size. Three tiers: <20MB (4 threads, deep), 20-80MB (2 threads, deep), >80MB (1 thread, tiled 1000µm).
+- **DRC deck updated** — Conditional tiling in `sky130A_mr.drc` reads `$drc_mode` param.
+- **API response** — Includes `strategy` block with mode/threads/tile_size_um.
+- **12 new tests** — `TestAdaptiveStrategy` (7), `TestBuildCommandWithStrategy` (4), `TestRunIncludesStrategy` (1).
+
+### Decisions
+- Strategy computed from `gds_path.stat().st_size` — no user input needed
+- DRC deck backward-compatible (defaults to deep if `$drc_mode` not set)
+
+### Next
+- Integration tests with real KLayout
+- Memory profiling
+- Vendor DRC deck
 
 ---
 
 ## Session 5: 2026-03-02 — Phase 4 complete (Production Hardening)
 
 ### Done
-- **P4-1: Fix apply + re-DRC loop** — `export/gdsii.py` (versioned GDS export), `api/routes/fix.py` (apply-and-recheck endpoint combining fix+DRC in one call), iteration tracking on jobs, fix cache clearing on re-run. Status flow: `fixes_applied` → `running_drc` → `drc_complete`/`complete`.
-- **P4-2: SQLite job persistence** — `jobs/database.py` (thread-safe SQLite with WAL mode, thread-local connections), rewrote `jobs/manager.py` to use SQLite instead of JSON files. Schema includes `iteration` column. 8 database tests + 11 manager tests.
-- **P4-3: Report export (JSON, CSV, HTML)** — `export/report.py` (3 formats with proper escaping, severity colors), `api/routes/export.py` (`GET /jobs/{id}/report/{format}`). 9 export tests.
-- **P4-4: Docker + CI/CD** — Multi-stage `Dockerfile` (Python+KLayout+frontend), `docker-compose.yml` with health check, `.github/workflows/ci.yml` (lint+test+frontend build).
-- **P4-5: Density fill strategy** — `fix/strategies/density.py` (grid-aligned fill polygons, spacing-aware placement, stops at target density), added `min_density` to `RuleType` enum, registered in engine with priority 7. 8 strategy tests.
-- **Lint cleanup** — Fixed all pre-existing ruff errors (unused vars, long lines, import sorting) across entire codebase.
-- **273 unit tests total**, all passing. Frontend builds clean.
+- **P4-1 through P4-5** — Fix-apply re-DRC loop, SQLite persistence (WAL), report export (JSON/CSV/HTML), Docker+CI/CD, density fill strategy.
+- **273 unit tests total**, all passing.
 
 ### Decisions
-- SQLite WAL mode for concurrent reads during DRC execution
-- Job DB file lives at `data/jobs/jobs.db` alongside job directories
-- `fixes_applied` new status allows re-DRC without going through upload again
+- SQLite WAL mode for concurrent reads during DRC
 - `apply-and-recheck` endpoint auto-sets `complete` if violations reach 0
-- Density fill uses PDK spacing/width rules for fill sizing, 25% default target
-- Versioned export: `_fixed.gds`, `_fixed_v2.gds`, etc.
+- Density fill uses PDK spacing/width rules, 25% default target
 
 ### Next
-- Install KLayout CLI for integration tests
+- KLayout CLI for integration tests
 - Vendor SKY130 DRC deck
-- Write PDK authoring guide (`docs/pdk-authoring.md`)
-- End-to-end integration test with real DRC run
-
----
-
-## Session 4: 2026-03-02 — Phase 3 complete (Web API + Layout Viewer)
-
-### Done
-- **P3-1: FastAPI scaffold + upload/job** — `jobs/manager.py` (JSON-persisted job lifecycle), `api/routes/upload.py` (multipart GDSII upload), `api/deps.py` (singleton managers), CORS middleware. 18 tests.
-- **P3-2: DRC + violation API** — `api/routes/drc.py` (sync DRC trigger, violation retrieval with PDK mapping). Mocked KLayout integration test.
-- **P3-3: Fix suggestion + preview API** — `api/routes/fix.py` (suggest/preview/apply endpoints, in-memory fix cache, polygon delta application).
-- **P3-4: Layout geometry API + WebGL viewer** — `api/routes/layout.py` (polygons by layer with PDK colors), `api/routes/pdk.py` (PDK listing/details). React+Vite+TypeScript frontend with `WebGLRenderer.ts` (earcut triangulation, pan/zoom/fit), `LayoutViewer.tsx`, `LayerPanel.tsx`.
-- **P3-5: Violation overlay + fix panel UI** — `ViolationList.tsx` (sortable by severity/count/rule), `ViolationOverlay.tsx` (violation badge), `FixPanel.tsx` (checkbox selection, apply, preview modal), `FixPreview.tsx` (SVG before/after diff).
-- **243 unit tests total**, all passing. Frontend builds clean (TypeScript + Vite).
-
-### Decisions
-- Job persistence via JSON files in `data/jobs/<id>/` (not SQLite yet — Phase 4)
-- API deps use late-import config for test isolation
-- WebGL renderer uses simple vertex/fragment shaders with camera transform, earcut for triangulation
-- Fix preview uses SVG (not WebGL) for before/after polygon diff — simpler
-
-### Next
-- Phase 4: Production Hardening (fix-apply re-DRC loop, SQLite, report export, Docker, density fill)
-- Install KLayout CLI for integration tests
-- Vendor SKY130 DRC deck
-
----
-
-## Session 3: 2026-03-02 — Phase 1 complete + Phase 2 complete
-
-### Done
-- **P1-3: KLayout DRC runner** — `backend/core/drc_runner.py`: subprocess wrapper, temp file management, timeout handling, DRCResult/DRCError. 20 tests (mocked subprocess).
-- **P1-4: Violation parser + models** — `violation_models.py` + `violation_parser.py`: .lyrdb XML parser, edge-pair/polygon/edge/box support, PDK rule mapping. 48 tests + 3 .lyrdb fixtures.
-- **P2-1: Spatial index + clustering** — `core/spatial_index.py` (R-tree), `fix/clustering.py` (union-find single-linkage). 24 tests.
-- **P2-2: Width + spacing fixes** — `fix/strategies/base.py` (abstract FixStrategy), `fix/fix_models.py` (FixSuggestion, PolygonDelta), `width.py` (expand toward free space), `spacing.py` (move or shrink). 10 tests.
-- **P2-3: Enclosure + area fixes** — `enclosure.py` (extend metal, never move via), `area.py` (extend in least-constrained direction). 4 tests.
-- **P2-4: Short + offgrid fixes** — `short.py` (shrink smaller polygon + spacing buffer), `offgrid.py` (conservative snap to grid). 8 tests.
-- **P2-5: Validator + engine** — `fix/validator.py` (grid/degenerate/width/spacing pre-checks), `fix/engine.py` (orchestrator with priority sorting). 21 tests.
-- **214 unit tests total**, all passing in 0.22s
-
-### Decisions
-- Custom XML parser for .lyrdb instead of klayout.rdb Python bindings — simpler, no klayout import needed
-- Violations grouped by category+cell — single Violation object with multiple geometries per rule/cell pair
-- Fix strategies operate on individual ViolationGeometry markers, engine iterates all geometries
-- Validator uses bbox-level spacing approximation (not exact polygon distance) — fast but conservative
-
-### Next
-- Phase 3: Web API + Layout Viewer (5 stories: FastAPI scaffold, DRC endpoints, fix endpoints, WebGL viewer, violation overlay)
-- Install KLayout CLI for integration tests
-- Vendor SKY130 DRC deck
+- PDK authoring guide

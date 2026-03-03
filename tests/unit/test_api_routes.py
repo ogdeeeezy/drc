@@ -176,8 +176,9 @@ class TestLayout:
 
 
 class TestDRC:
-    def test_run_drc_no_report(self, client, sample_gds):
-        """DRC requires KLayout — test the status check."""
+    @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=False)
+    def test_run_drc_no_report(self, mock_avail, client, sample_gds):
+        """DRC fails when KLayout is unavailable."""
         r = client.post(
             "/api/upload",
             files={"file": ("test.gds", io.BytesIO(sample_gds), "application/octet-stream")},

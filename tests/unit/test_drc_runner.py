@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
+from backend.config import DRC_LARGE_THRESHOLD, DRC_SMALL_THRESHOLD, DRCStrategy
 from backend.core.drc_runner import DRCError, DRCResult, DRCRunner
 from backend.pdk.schema import (
     DesignRule,
@@ -79,7 +80,8 @@ def lyrdb_content():
 class TestDRCRunnerInit:
     def test_default_binary(self):
         runner = DRCRunner()
-        assert runner.binary == "klayout"
+        # KLAYOUT_BINARY resolves to app bundle path if installed, or bare "klayout"
+        assert "klayout" in runner.binary.lower()
 
     def test_custom_binary(self):
         runner = DRCRunner(klayout_binary="/usr/local/bin/klayout")
@@ -98,30 +100,28 @@ class TestDRCRunnerAvailability:
         runner = DRCRunner()
         assert runner.check_klayout_available() is True
 
-    @patch("shutil.which", return_value=None)
-    def test_unavailable_returns_false(self, mock_which):
-        runner = DRCRunner()
+    def test_unavailable_returns_false(self):
+        runner = DRCRunner(klayout_binary="/nonexistent/path/to/klayout")
         assert runner.check_klayout_available() is False
 
 
 class TestBuildCommand:
     def test_basic_command(self):
-        runner = DRCRunner()
+        runner = DRCRunner(klayout_binary="klayout")
         cmd = runner.build_command(
             gds_path=Path("/tmp/test.gds"),
             drc_deck_path=Path("/tmp/sky130.drc"),
             report_path=Path("/tmp/report.lyrdb"),
         )
-        assert cmd == [
-            "klayout",
-            "-b",
-            "-r",
-            "/tmp/sky130.drc",
-            "-rd",
-            "input=/tmp/test.gds",
-            "-rd",
-            "report=/tmp/report.lyrdb",
-        ]
+        # Core args
+        assert cmd[0] == "klayout"
+        assert "-b" in cmd
+        assert "input=/tmp/test.gds" in cmd
+        assert "report=/tmp/report.lyrdb" in cmd
+        # Default DRC flags are included
+        assert "feol=true" in cmd
+        assert "beol=true" in cmd
+        assert "offgrid=true" in cmd
 
     def test_with_top_cell(self):
         runner = DRCRunner()
@@ -142,6 +142,18 @@ class TestBuildCommand:
             report_path=Path("/tmp/report.lyrdb"),
         )
         assert cmd[0] == "/opt/klayout/bin/klayout"
+
+    def test_custom_drc_flags(self):
+        """Custom flags override defaults."""
+        runner = DRCRunner(klayout_binary="klayout")
+        cmd = runner.build_command(
+            gds_path=Path("/tmp/test.gds"),
+            drc_deck_path=Path("/tmp/sky130.drc"),
+            report_path=Path("/tmp/report.lyrdb"),
+            drc_flags={"feol": "false", "seal": "true"},
+        )
+        assert "feol=false" in cmd
+        assert "seal=true" in cmd
 
 
 class TestDRCDeckResolution:
@@ -335,3 +347,141 @@ class TestDRCError:
         err = DRCError("simple")
         assert err.returncode == -1
         assert err.stderr == ""
+
+
+class TestAdaptiveStrategy:
+    """Test adaptive DRC strategy selection based on file size."""
+
+    def test_small_file_deep_4_threads(self):
+        """< 20 MB → deep mode, 4 threads."""
+        strategy = DRCRunner.adaptive_strategy(10 * 1024 * 1024)  # 10 MB
+        assert strategy.mode == "deep"
+        assert strategy.threads == 4
+        assert strategy.tile_size_um is None
+
+    def test_medium_file_deep_2_threads(self):
+        """20-80 MB → deep mode, 2 threads."""
+        strategy = DRCRunner.adaptive_strategy(50 * 1024 * 1024)  # 50 MB
+        assert strategy.mode == "deep"
+        assert strategy.threads == 2
+        assert strategy.tile_size_um is None
+
+    def test_large_file_tiled_1_thread(self):
+        """> 80 MB → tiled mode, 1 thread."""
+        strategy = DRCRunner.adaptive_strategy(100 * 1024 * 1024)  # 100 MB
+        assert strategy.mode == "tiled"
+        assert strategy.threads == 1
+        assert strategy.tile_size_um == 1000.0
+
+    def test_boundary_small_to_medium(self):
+        """Exactly 20 MB → medium tier (20-80 MB)."""
+        strategy = DRCRunner.adaptive_strategy(DRC_SMALL_THRESHOLD)
+        assert strategy.mode == "deep"
+        assert strategy.threads == 2
+
+    def test_boundary_medium_to_large(self):
+        """Exactly 80 MB → large tier (> 80 MB)."""
+        strategy = DRCRunner.adaptive_strategy(DRC_LARGE_THRESHOLD)
+        assert strategy.mode == "tiled"
+        assert strategy.threads == 1
+
+    def test_zero_size(self):
+        """0 bytes → small tier."""
+        strategy = DRCRunner.adaptive_strategy(0)
+        assert strategy.mode == "deep"
+        assert strategy.threads == 4
+
+    def test_just_under_small_threshold(self):
+        strategy = DRCRunner.adaptive_strategy(DRC_SMALL_THRESHOLD - 1)
+        assert strategy.mode == "deep"
+        assert strategy.threads == 4
+
+
+class TestBuildCommandWithStrategy:
+    """Test command building with adaptive strategy parameters."""
+
+    def test_deep_strategy(self):
+        runner = DRCRunner()
+        strategy = DRCStrategy(threads=4, mode="deep")
+        cmd = runner.build_command(
+            gds_path=Path("/tmp/test.gds"),
+            drc_deck_path=Path("/tmp/sky130.drc"),
+            report_path=Path("/tmp/report.lyrdb"),
+            strategy=strategy,
+        )
+        assert "thr=4" in cmd
+        assert "drc_mode=deep" in cmd
+        # No tile_size for deep mode
+        assert all("tile_size=" not in arg for arg in cmd)
+
+    def test_tiled_strategy(self):
+        runner = DRCRunner()
+        strategy = DRCStrategy(threads=1, mode="tiled", tile_size_um=1000.0)
+        cmd = runner.build_command(
+            gds_path=Path("/tmp/test.gds"),
+            drc_deck_path=Path("/tmp/sky130.drc"),
+            report_path=Path("/tmp/report.lyrdb"),
+            strategy=strategy,
+        )
+        assert "thr=1" in cmd
+        assert "drc_mode=tiled" in cmd
+        assert "tile_size=1000.0" in cmd
+
+    def test_no_strategy(self):
+        """Without strategy, no thr/drc_mode params are added (backward compat)."""
+        runner = DRCRunner()
+        cmd = runner.build_command(
+            gds_path=Path("/tmp/test.gds"),
+            drc_deck_path=Path("/tmp/sky130.drc"),
+            report_path=Path("/tmp/report.lyrdb"),
+        )
+        assert all("thr=" not in arg for arg in cmd)
+        assert all("drc_mode=" not in arg for arg in cmd)
+        # But DRC flags are still present
+        assert "feol=true" in cmd
+
+    def test_strategy_with_top_cell(self):
+        runner = DRCRunner()
+        strategy = DRCStrategy(threads=2, mode="deep")
+        cmd = runner.build_command(
+            gds_path=Path("/tmp/test.gds"),
+            drc_deck_path=Path("/tmp/sky130.drc"),
+            report_path=Path("/tmp/report.lyrdb"),
+            top_cell="INV",
+            strategy=strategy,
+        )
+        assert "topcell=INV" in cmd
+        assert "thr=2" in cmd
+        assert "drc_mode=deep" in cmd
+
+
+class TestRunIncludesStrategy:
+    """Verify that run() populates strategy in the result."""
+
+    @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
+    @patch("subprocess.run")
+    def test_result_has_strategy(
+        self, mock_run, mock_avail, pdk_config, sample_gds, lyrdb_content, tmp_path
+    ):
+        def side_effect(*args, **kwargs):
+            cmd = args[0]
+            for arg in cmd:
+                if arg.startswith("report="):
+                    Path(arg.split("=", 1)[1]).write_text(lyrdb_content)
+                    break
+            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+
+        mock_run.side_effect = side_effect
+
+        runner = DRCRunner()
+        with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
+            deck_dir = tmp_path / "pdk" / "configs" / "test_pdk"
+            deck_dir.mkdir(parents=True, exist_ok=True)
+            (deck_dir / "test.drc").write_text("# stub")
+
+            result = runner.run(sample_gds, pdk_config, output_dir=tmp_path, map_to_pdk=False)
+
+        assert result.strategy is not None
+        # sample_gds is tiny, so should be small tier
+        assert result.strategy.mode == "deep"
+        assert result.strategy.threads == 4
