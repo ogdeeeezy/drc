@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import shutil
 import subprocess
@@ -282,6 +283,151 @@ class DRCRunner:
             )
 
         # Parse the report
+        if not report_path.exists():
+            raise DRCError(
+                "KLayout completed but no report file generated. "
+                "Check that the DRC deck uses report() to output results.",
+                returncode=proc.returncode,
+                stderr=stderr,
+            )
+
+        report = self._parser.parse_file(report_path)
+        if map_to_pdk:
+            self._parser.map_to_pdk(report, pdk)
+
+        return DRCResult(
+            report=report,
+            report_path=report_path,
+            returncode=proc.returncode,
+            stdout=stdout,
+            stderr=stderr,
+            duration_seconds=duration,
+            klayout_binary=self._binary,
+            strategy=strategy,
+        )
+
+    async def async_run(
+        self,
+        gds_path: str | Path,
+        pdk: PDKConfig,
+        top_cell: str | None = None,
+        output_dir: str | Path | None = None,
+        map_to_pdk: bool = True,
+    ) -> DRCResult:
+        """Run DRC asynchronously — does not block the event loop.
+
+        Same interface as run() but uses asyncio.create_subprocess_exec
+        so the uvicorn worker thread stays free during long DRC runs.
+
+        Args:
+            gds_path: Path to input GDSII file.
+            pdk: PDK configuration with DRC deck reference.
+            top_cell: Top cell to check (auto-detected if None).
+            output_dir: Directory for report output. Uses temp dir if None.
+            map_to_pdk: Whether to map violations to PDK rules.
+
+        Returns:
+            DRCResult with parsed violations and execution metadata.
+
+        Raises:
+            DRCError: If KLayout is not available, DRC deck not found, or execution fails.
+            FileNotFoundError: If GDSII file doesn't exist.
+        """
+        gds_path = Path(gds_path)
+        if not gds_path.exists():
+            raise FileNotFoundError(f"GDSII file not found: {gds_path}")
+
+        if not self.check_klayout_available():
+            raise DRCError(
+                f"KLayout binary '{self._binary}' not found. "
+                "Install with: brew install klayout (macOS) or apt install klayout (Linux)"
+            )
+
+        drc_deck_path = self.get_drc_deck_path(pdk)
+
+        # Select adaptive strategy based on file size
+        strategy = self.adaptive_strategy(gds_path.stat().st_size)
+
+        # Set up output directory
+        use_temp = output_dir is None
+        if use_temp:
+            temp_dir = tempfile.mkdtemp(prefix="agentic_drc_")
+            out_dir = Path(temp_dir)
+        else:
+            out_dir = Path(output_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+        report_path = out_dir / f"{gds_path.stem}_drc.lyrdb"
+
+        cmd = self.build_command(gds_path, drc_deck_path, report_path, top_cell, strategy)
+
+        # Throttle CPU with layered approach
+        import platform
+
+        if platform.system() == "Darwin" and shutil.which("taskpolicy"):
+            cmd = ["taskpolicy", "-b"] + cmd
+        cmd = ["nice", "-n", str(DRC_NICE_LEVEL)] + cmd
+
+        start_time = time.monotonic()
+        cpulimit_proc = None
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            logger.info("DRC started async (pid %d, nice %d)", proc.pid, DRC_NICE_LEVEL)
+
+            # Attach cpulimit for hard CPU cap if available
+            cpulimit_bin = shutil.which("cpulimit")
+            if cpulimit_bin and DRC_CPU_LIMIT_PERCENT < 100:
+                try:
+                    cpulimit_proc = subprocess.Popen(
+                        [cpulimit_bin, "-p", str(proc.pid), "-l", str(DRC_CPU_LIMIT_PERCENT)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    logger.info(
+                        "CPU capped at %d%% via cpulimit (pid %d)",
+                        DRC_CPU_LIMIT_PERCENT,
+                        proc.pid,
+                    )
+                except OSError:
+                    pass
+
+            try:
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                    proc.communicate(), timeout=self._timeout
+                )
+                stdout = stdout_bytes.decode() if stdout_bytes else ""
+                stderr = stderr_bytes.decode() if stderr_bytes else ""
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                raise DRCError(
+                    f"DRC timed out after {self._timeout}s",
+                    returncode=-1,
+                    stderr="timeout",
+                )
+        except OSError as e:
+            raise DRCError(
+                f"Failed to execute KLayout: {e}",
+                returncode=-1,
+                stderr=str(e),
+            )
+        finally:
+            if cpulimit_proc:
+                cpulimit_proc.terminate()
+                cpulimit_proc.wait()
+        duration = time.monotonic() - start_time
+
+        if proc.returncode != 0:
+            raise DRCError(
+                f"KLayout DRC failed (exit code {proc.returncode}): {stderr}",
+                returncode=proc.returncode,
+                stderr=stderr,
+            )
+
         if not report_path.exists():
             raise DRCError(
                 "KLayout completed but no report file generated. "

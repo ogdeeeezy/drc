@@ -2,18 +2,77 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+
 from fastapi import APIRouter, HTTPException
 
 from backend.api.deps import get_job_manager, get_pdk_registry
 from backend.core.drc_runner import DRCError, DRCRunner
 from backend.jobs.manager import JobStatus
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/jobs", tags=["drc"])
+
+
+async def _run_drc_background(
+    job_id: str,
+    gds_path: str,
+    pdk_name: str,
+    top_cell: str | None,
+    job_dir: str,
+) -> None:
+    """Background coroutine that runs DRC and updates job status on completion."""
+    manager = get_job_manager()
+    registry = get_pdk_registry()
+
+    try:
+        pdk = registry.load(pdk_name)
+    except FileNotFoundError as e:
+        manager.update_status(job_id, JobStatus.drc_failed, error=str(e))
+        return
+
+    runner = DRCRunner()
+    try:
+        from pathlib import Path
+
+        result = await runner.async_run(
+            gds_path=Path(gds_path),
+            pdk=pdk,
+            top_cell=top_cell,
+            output_dir=job_dir,
+        )
+    except DRCError as e:
+        logger.error("DRC failed for job %s: %s", job_id, e)
+        manager.update_status(job_id, JobStatus.drc_failed, error=str(e))
+        return
+    except FileNotFoundError as e:
+        logger.error("File not found during DRC for job %s: %s", job_id, e)
+        manager.update_status(job_id, JobStatus.drc_failed, error=str(e))
+        return
+
+    manager.update_status(
+        job_id,
+        JobStatus.drc_complete,
+        report_path=str(result.report_path),
+        top_cell=result.report.top_cell,
+        total_violations=result.report.total_violations,
+    )
+    logger.info(
+        "DRC complete for job %s: %d violations in %.1fs",
+        job_id,
+        result.report.total_violations,
+        result.duration_seconds,
+    )
 
 
 @router.post("/{job_id}/drc")
 async def run_drc(job_id: str, top_cell: str | None = None):
     """Run DRC on an uploaded or fixed GDSII file.
+
+    Returns immediately with status 'running_drc'. DRC runs asynchronously
+    in the background — poll GET /api/jobs/{job_id} for completion.
 
     Supports re-DRC after fix application — clears fix cache and
     increments iteration when re-running from fixes_applied status.
@@ -39,68 +98,21 @@ async def run_drc(job_id: str, top_cell: str | None = None):
     if job.status == JobStatus.fixes_applied:
         manager.update_status(job_id, JobStatus.running_drc, iteration=job.iteration + 1)
         job = manager.get(job_id)  # refresh
+    else:
+        # Update status to running_drc
+        manager.update_status(job_id, JobStatus.running_drc)
 
-    # Load PDK
-    registry = get_pdk_registry()
-    try:
-        pdk = registry.load(job.pdk_name)
-    except FileNotFoundError as e:
-        raise HTTPException(404, str(e))
+    job_dir = str(manager.job_dir(job_id))
 
-    # Update status
-    manager.update_status(job_id, JobStatus.running_drc)
-
-    # Run DRC
-    runner = DRCRunner()
-    job_dir = manager.job_dir(job_id)
-    try:
-        from pathlib import Path
-
-        result = runner.run(
-            gds_path=Path(job.gds_path),
-            pdk=pdk,
-            top_cell=top_cell,
-            output_dir=job_dir,
-        )
-    except DRCError as e:
-        manager.update_status(job_id, JobStatus.drc_failed, error=str(e))
-        raise HTTPException(500, f"DRC failed: {e}")
-    except FileNotFoundError as e:
-        manager.update_status(job_id, JobStatus.drc_failed, error=str(e))
-        raise HTTPException(404, str(e))
-
-    # Update job with results
-    manager.update_status(
-        job_id,
-        JobStatus.drc_complete,
-        report_path=str(result.report_path),
-        top_cell=result.report.top_cell,
-        total_violations=result.report.total_violations,
+    # Launch DRC as a background task — does not block the response
+    asyncio.create_task(
+        _run_drc_background(job_id, job.gds_path, job.pdk_name, top_cell, job_dir)
     )
 
-    response = {
+    return {
         "job_id": job_id,
-        "status": "drc_complete",
-        "total_violations": result.report.total_violations,
-        "duration_seconds": round(result.duration_seconds, 2),
-        "categories": [
-            {
-                "category": v.category,
-                "description": v.description,
-                "count": v.violation_count,
-                "severity": v.severity,
-                "rule_type": v.rule_type,
-            }
-            for v in result.report.violations
-        ],
+        "status": "running_drc",
     }
-    if result.strategy:
-        response["strategy"] = {
-            "mode": result.strategy.mode,
-            "threads": result.strategy.threads,
-            "tile_size_um": result.strategy.tile_size_um,
-        }
-    return response
 
 
 @router.get("/{job_id}/violations")

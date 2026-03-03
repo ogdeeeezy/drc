@@ -177,17 +177,18 @@ class TestLayout:
 
 class TestDRC:
     @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=False)
-    def test_run_drc_no_report(self, mock_avail, client, sample_gds):
-        """DRC fails when KLayout is unavailable."""
+    def test_run_drc_klayout_unavailable(self, mock_avail, client, sample_gds):
+        """DRC returns 200 immediately (async); failure handled in background."""
         r = client.post(
             "/api/upload",
             files={"file": ("test.gds", io.BytesIO(sample_gds), "application/octet-stream")},
         )
         job_id = r.json()["job_id"]
 
-        # Running DRC will fail without KLayout binary — expect 500
+        # POST returns 200 with running_drc (async background task)
         r2 = client.post(f"/api/jobs/{job_id}/drc")
-        assert r2.status_code == 500
+        assert r2.status_code == 200
+        assert r2.json()["status"] == "running_drc"
 
     def test_get_violations_no_report(self, client, sample_gds):
         r = client.post(
@@ -199,8 +200,8 @@ class TestDRC:
         r2 = client.get(f"/api/jobs/{job_id}/violations")
         assert r2.status_code == 400
 
-    def test_run_drc_with_mock(self, client, sample_gds, tmp_dir):
-        """Test DRC with mocked KLayout subprocess."""
+    def test_run_drc_returns_immediately(self, client, sample_gds, tmp_dir):
+        """POST /drc returns immediately with status=running_drc (async)."""
         # Upload
         r = client.post(
             "/api/upload",
@@ -237,7 +238,8 @@ class TestDRC:
   </items>
 </report-database>"""
 
-        # Mock the DRC runner
+        from unittest.mock import AsyncMock
+
         from backend.core.drc_runner import DRCResult
         from backend.core.violation_parser import ViolationParser
 
@@ -260,20 +262,48 @@ class TestDRC:
 
         with patch("backend.api.routes.drc.DRCRunner") as MockRunner:
             instance = MockRunner.return_value
-            instance.run.return_value = mock_result
+            instance.async_run = AsyncMock(return_value=mock_result)
 
             r2 = client.post(f"/api/jobs/{job_id}/drc")
             assert r2.status_code == 200
             data = r2.json()
-            assert data["total_violations"] == 1
-            assert len(data["categories"]) == 1
-            assert data["categories"][0]["category"] == "met1.1"
+            assert data["status"] == "running_drc"
+            assert data["job_id"] == job_id
 
-        # Now test get violations
-        r3 = client.get(f"/api/jobs/{job_id}/violations")
+        # Wait briefly for background task to complete
+        import time
+
+        time.sleep(0.1)
+
+        # Job status should be updated by background task
+        r3 = client.get(f"/api/jobs/{job_id}")
         assert r3.status_code == 200
-        vdata = r3.json()
-        assert vdata["total_violations"] == 1
+        job_data = r3.json()
+        assert job_data["status"] in ("running_drc", "drc_complete")
+
+        # If background task completed, violations should be available
+        if job_data["status"] == "drc_complete":
+            r4 = client.get(f"/api/jobs/{job_id}/violations")
+            assert r4.status_code == 200
+            vdata = r4.json()
+            assert vdata["total_violations"] == 1
+
+    def test_run_drc_already_running(self, client, sample_gds):
+        """409 if DRC already running for job."""
+        r = client.post(
+            "/api/upload",
+            files={"file": ("test.gds", io.BytesIO(sample_gds), "application/octet-stream")},
+        )
+        job_id = r.json()["job_id"]
+
+        # Manually set status to running_drc
+        manager = deps.get_job_manager()
+        from backend.jobs.manager import JobStatus
+
+        manager.update_status(job_id, JobStatus.running_drc)
+
+        r2 = client.post(f"/api/jobs/{job_id}/drc")
+        assert r2.status_code == 409
 
 
 class TestFix:

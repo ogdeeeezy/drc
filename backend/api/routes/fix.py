@@ -259,7 +259,7 @@ async def apply_and_recheck(job_id: str, request: ApplyFixRequest):
     # Clear fix cache for fresh suggestions
     clear_fix_cache(job_id)
 
-    # Step 3: Re-run DRC
+    # Step 3: Re-run DRC (async — does not block event loop)
     registry = get_pdk_registry()
     try:
         pdk = registry.load(job.pdk_name)
@@ -268,7 +268,7 @@ async def apply_and_recheck(job_id: str, request: ApplyFixRequest):
 
     runner = DRCRunner()
     try:
-        drc_result = runner.run(
+        drc_result = await runner.async_run(
             gds_path=fixed_path,
             pdk=pdk,
             top_cell=job.top_cell,
