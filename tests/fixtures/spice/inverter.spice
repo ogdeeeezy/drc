@@ -1,0 +1,11 @@
+* SKY130 CMOS Inverter
+* Clean netlist for LVS verification (should match a standard inverter layout)
+*
+* Ports: VDD (power), VSS (ground), IN (gate input), OUT (drain output)
+
+.subckt INVERTER VDD VSS IN OUT
+
+MPMOS OUT IN VDD VDD PMOS W=0.84e-6 L=0.15e-6
+MNMOS OUT IN VSS VSS NMOS W=0.42e-6 L=0.15e-6
+
+.ends INVERTER

@@ -1,0 +1,154 @@
+# SKY130A LVS Deck for KLayout
+# ---------------------------------------------------------------------------
+# Performs Layout vs Schematic comparison for the SkyWater 130nm process.
+#
+# Usage:
+#   klayout -b -r sky130A.lvs \
+#     -rd input=layout.gds \
+#     -rd schematic=circuit.spice \
+#     -rd report=output.lvsdb
+#
+# Extracts: NMOS, PMOS transistors and poly resistors
+# Connectivity: Full metal stack (li1 through met5)
+# ---------------------------------------------------------------------------
+
+# -- Input Setup -------------------------------------------------------------
+source($input)
+schematic($schematic)
+report_lvs($report)
+
+# Enable hierarchical extraction for multi-cell designs
+deep
+
+# -- GDS Layer Definitions (SKY130) ------------------------------------------
+# Wells and active
+nwell      = input(64, 20)
+diff       = input(65, 20)   # Active diffusion (transistor source/drain)
+tap        = input(65, 44)   # Well/substrate tap (body contacts)
+poly       = input(66, 20)   # Polysilicon
+
+# Implant markers
+nsdm       = input(93, 44)   # N+ source/drain marker
+psdm       = input(94, 20)   # P+ source/drain marker
+
+# Resistor markers
+poly_res   = input(66, 13)   # Poly resistor identification layer
+rpm        = input(86, 20)   # Resistor poly marker (high-value)
+
+# Contact and via layers
+licon      = input(66, 44)   # Local interconnect contact
+li1        = input(67, 20)   # Local interconnect
+mcon       = input(67, 44)   # Metal contact (li1 to met1)
+met1       = input(68, 20)   # Metal 1
+via1       = input(68, 44)   # Via 1 (met1 to met2)
+met2       = input(69, 20)   # Metal 2
+via2       = input(69, 44)   # Via 2 (met2 to met3)
+met3       = input(70, 20)   # Metal 3
+via3       = input(70, 44)   # Via 3 (met3 to met4)
+met4       = input(71, 20)   # Metal 4
+via4       = input(71, 44)   # Via 4 (met4 to met5)
+met5       = input(72, 20)   # Metal 5
+
+# Label layers for net naming
+li1_lbl    = input(67, 5)
+met1_lbl   = input(68, 5)
+met2_lbl   = input(69, 5)
+met3_lbl   = input(70, 5)
+met4_lbl   = input(71, 5)
+met5_lbl   = input(72, 5)
+
+# -- Derived Layers ----------------------------------------------------------
+# P-well: implicit p-type substrate (everywhere n-well is absent)
+pwell = nwell.inverted
+
+# N+ active (NMOS source/drain): diffusion with N+ implant
+nsd = diff & nsdm
+
+# P+ active (PMOS source/drain): diffusion with P+ implant
+psd = diff & psdm
+
+# Well/substrate taps for body contacts
+ntap = tap & nsdm    # N-well tap (connects nwell to VDD)
+ptap = tap & psdm    # P-substrate tap (connects pwell to VSS)
+
+# Poly resistor body: poly with resistor ID marker
+poly_resistor_body = poly & poly_res
+
+# Gate poly: polysilicon NOT marked as resistor
+gate_poly = poly - poly_res
+
+# -- Device Extraction -------------------------------------------------------
+# NMOS: N-channel MOSFET in p-type substrate
+#   Source/drain = N+ diffusion
+#   Gate = polysilicon (excluding resistor-marked poly)
+#   Well/body = p-substrate
+extract_devices(mos4("NMOS"), {
+  "SD" => nsd,
+  "G"  => gate_poly,
+  "W"  => pwell,
+  "tS" => nsd
+})
+
+# PMOS: P-channel MOSFET in n-well
+#   Source/drain = P+ diffusion
+#   Gate = polysilicon (excluding resistor-marked poly)
+#   Well/body = n-well
+extract_devices(mos4("PMOS"), {
+  "SD" => psd,
+  "G"  => gate_poly,
+  "W"  => nwell,
+  "tS" => psd
+})
+
+# Poly resistor: SKY130 XHR poly (~2000 ohm/sq)
+#   Body = poly marked with resistor ID layer
+#   Contacts = licon landing on the resistor poly
+extract_devices(resistor("RES", 2000.0), {
+  "R" => poly_resistor_body,
+  "C" => poly_resistor_body & licon
+})
+
+# -- Connectivity ------------------------------------------------------------
+# Diffusion/tap to local interconnect contacts
+connect(nsd,   licon)
+connect(psd,   licon)
+connect(ntap,  licon)
+connect(ptap,  licon)
+connect(gate_poly, licon)
+
+# Resistor poly also connects through licon
+connect(poly_resistor_body, licon)
+
+# Local interconnect stack
+connect(licon, li1)
+connect(li1,   mcon)
+connect(mcon,  met1)
+
+# Metal stack
+connect(met1, via1)
+connect(via1, met2)
+connect(met2, via2)
+connect(via2, met3)
+connect(met3, via3)
+connect(via3, met4)
+connect(met4, via4)
+connect(via4, met5)
+
+# Well and substrate body connections through taps
+connect(nwell, ntap)
+connect(pwell, ptap)
+
+# Net labels: attach text labels to routing layers for net naming
+connect(li1,  li1_lbl)
+connect(met1, met1_lbl)
+connect(met2, met2_lbl)
+connect(met3, met3_lbl)
+connect(met4, met4_lbl)
+connect(met5, met5_lbl)
+
+# -- Netlist Comparison -------------------------------------------------------
+# Simplify extracted netlist: combine parallel devices, remove floating nets
+netlist.simplify
+
+# Compare extracted netlist against reference schematic
+compare
