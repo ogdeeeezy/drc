@@ -2,7 +2,7 @@
 
 import subprocess
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -175,23 +175,25 @@ class TestDRCRunMocked:
     """Test DRC execution with mocked subprocess (no KLayout required)."""
 
     @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
-    @patch("subprocess.run")
+    @patch("subprocess.Popen")
     def test_successful_run(
-        self, mock_run, mock_avail, pdk_config, sample_gds, lyrdb_content, tmp_path
+        self, mock_popen, mock_avail, pdk_config, sample_gds, lyrdb_content, tmp_path
     ):
         # Set up the mock: klayout "runs" and produces a .lyrdb file
-        def side_effect(*args, **kwargs):
+        def side_effect(cmd, **kwargs):
             # Simulate KLayout writing a report file
-            # Extract report path from command
-            cmd = args[0]
-            for i, arg in enumerate(cmd):
+            for arg in cmd:
                 if arg.startswith("report="):
                     rpath = Path(arg.split("=", 1)[1])
                     rpath.write_text(lyrdb_content)
                     break
-            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+            mock_proc = MagicMock()
+            mock_proc.pid = 12345
+            mock_proc.returncode = 0
+            mock_proc.communicate.return_value = ("", "")
+            return mock_proc
 
-        mock_run.side_effect = side_effect
+        mock_popen.side_effect = side_effect
 
         runner = DRCRunner()
         with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
@@ -220,11 +222,13 @@ class TestDRCRunMocked:
             runner.run(Path("/nonexistent/file.gds"), pdk_config)
 
     @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
-    @patch("subprocess.run")
-    def test_klayout_failure(self, mock_run, mock_avail, pdk_config, sample_gds, tmp_path):
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=1, stdout="", stderr="DRC script error"
-        )
+    @patch("subprocess.Popen")
+    def test_klayout_failure(self, mock_popen, mock_avail, pdk_config, sample_gds, tmp_path):
+        mock_proc = MagicMock()
+        mock_proc.pid = 12345
+        mock_proc.returncode = 1
+        mock_proc.communicate.return_value = ("", "DRC script error")
+        mock_popen.return_value = mock_proc
         runner = DRCRunner()
         with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
             deck_dir = tmp_path / "pdk" / "configs" / "test_pdk"
@@ -235,8 +239,13 @@ class TestDRCRunMocked:
                 runner.run(sample_gds, pdk_config, output_dir=tmp_path)
 
     @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
-    @patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="klayout", timeout=300))
-    def test_timeout(self, mock_run, mock_avail, pdk_config, sample_gds, tmp_path):
+    @patch("subprocess.Popen")
+    def test_timeout(self, mock_popen, mock_avail, pdk_config, sample_gds, tmp_path):
+        mock_proc = MagicMock()
+        mock_proc.pid = 12345
+        mock_proc.communicate.side_effect = subprocess.TimeoutExpired(cmd="klayout", timeout=300)
+        mock_popen.return_value = mock_proc
+
         runner = DRCRunner()
         with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
             deck_dir = tmp_path / "pdk" / "configs" / "test_pdk"
@@ -247,12 +256,14 @@ class TestDRCRunMocked:
                 runner.run(sample_gds, pdk_config, output_dir=tmp_path)
 
     @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
-    @patch("subprocess.run")
-    def test_no_report_generated(self, mock_run, mock_avail, pdk_config, sample_gds, tmp_path):
+    @patch("subprocess.Popen")
+    def test_no_report_generated(self, mock_popen, mock_avail, pdk_config, sample_gds, tmp_path):
         # KLayout succeeds but no report file created
-        mock_run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="", stderr=""
-        )
+        mock_proc = MagicMock()
+        mock_proc.pid = 12345
+        mock_proc.returncode = 0
+        mock_proc.communicate.return_value = ("", "")
+        mock_popen.return_value = mock_proc
         runner = DRCRunner()
         with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
             deck_dir = tmp_path / "pdk" / "configs" / "test_pdk"
@@ -459,19 +470,22 @@ class TestRunIncludesStrategy:
     """Verify that run() populates strategy in the result."""
 
     @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
-    @patch("subprocess.run")
+    @patch("subprocess.Popen")
     def test_result_has_strategy(
-        self, mock_run, mock_avail, pdk_config, sample_gds, lyrdb_content, tmp_path
+        self, mock_popen, mock_avail, pdk_config, sample_gds, lyrdb_content, tmp_path
     ):
-        def side_effect(*args, **kwargs):
-            cmd = args[0]
+        def side_effect(cmd, **kwargs):
             for arg in cmd:
                 if arg.startswith("report="):
                     Path(arg.split("=", 1)[1]).write_text(lyrdb_content)
                     break
-            return subprocess.CompletedProcess(args=cmd, returncode=0, stdout="", stderr="")
+            mock_proc = MagicMock()
+            mock_proc.pid = 12345
+            mock_proc.returncode = 0
+            mock_proc.communicate.return_value = ("", "")
+            return mock_proc
 
-        mock_run.side_effect = side_effect
+        mock_popen.side_effect = side_effect
 
         runner = DRCRunner()
         with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 import subprocess
 import tempfile
@@ -10,7 +11,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from backend.config import (
+    DRC_CPU_LIMIT_PERCENT,
     DRC_LARGE_THRESHOLD,
+    DRC_NICE_LEVEL,
     DRC_SMALL_THRESHOLD,
     DRC_TILE_SIZE_UM,
     DRC_TIMEOUT_SECONDS,
@@ -18,6 +21,8 @@ from backend.config import (
     PDK_CONFIGS_DIR,
     DRCStrategy,
 )
+
+logger = logging.getLogger(__name__)
 from backend.core.violation_models import DRCReport
 from backend.core.violation_parser import ViolationParser
 from backend.pdk.schema import PDKConfig
@@ -212,34 +217,68 @@ class DRCRunner:
 
         cmd = self.build_command(gds_path, drc_deck_path, report_path, top_cell, strategy)
 
+        # Throttle CPU with layered approach:
+        #   1. taskpolicy -b  — macOS background QoS (efficiency cores, lowest priority)
+        #   2. nice -n 10     — scheduling priority fallback (works on all Unix)
+        #   3. cpulimit -l N  — hard duty-cycle cap via SIGSTOP/SIGCONT
+        import platform
+
+        if platform.system() == "Darwin" and shutil.which("taskpolicy"):
+            cmd = ["taskpolicy", "-b"] + cmd
+        cmd = ["nice", "-n", str(DRC_NICE_LEVEL)] + cmd
+
         start_time = time.monotonic()
+        cpulimit_proc = None
         try:
-            proc = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=self._timeout,
             )
-        except subprocess.TimeoutExpired as e:
-            raise DRCError(
-                f"DRC timed out after {self._timeout}s",
-                returncode=-1,
-                stderr=str(e),
-            )
+            logger.info("DRC started (pid %d, nice %d)", proc.pid, DRC_NICE_LEVEL)
+
+            # Attach cpulimit for hard CPU cap if available
+            cpulimit_bin = shutil.which("cpulimit")
+            if cpulimit_bin and DRC_CPU_LIMIT_PERCENT < 100:
+                try:
+                    cpulimit_proc = subprocess.Popen(
+                        [cpulimit_bin, "-p", str(proc.pid), "-l", str(DRC_CPU_LIMIT_PERCENT)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                    logger.info("CPU capped at %d%% via cpulimit (pid %d)", DRC_CPU_LIMIT_PERCENT, proc.pid)
+                except OSError:
+                    pass
+
+            try:
+                stdout, stderr = proc.communicate(timeout=self._timeout)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                raise DRCError(
+                    f"DRC timed out after {self._timeout}s",
+                    returncode=-1,
+                    stderr="timeout",
+                )
         except OSError as e:
             raise DRCError(
                 f"Failed to execute KLayout: {e}",
                 returncode=-1,
                 stderr=str(e),
             )
+        finally:
+            if cpulimit_proc:
+                cpulimit_proc.terminate()
+                cpulimit_proc.wait()
         duration = time.monotonic() - start_time
 
         # KLayout returns 0 on success, even when violations are found
         if proc.returncode != 0:
             raise DRCError(
-                f"KLayout DRC failed (exit code {proc.returncode}): {proc.stderr}",
+                f"KLayout DRC failed (exit code {proc.returncode}): {stderr}",
                 returncode=proc.returncode,
-                stderr=proc.stderr,
+                stderr=stderr,
             )
 
         # Parse the report
@@ -248,7 +287,7 @@ class DRCRunner:
                 "KLayout completed but no report file generated. "
                 "Check that the DRC deck uses report() to output results.",
                 returncode=proc.returncode,
-                stderr=proc.stderr,
+                stderr=stderr,
             )
 
         report = self._parser.parse_file(report_path)
@@ -259,8 +298,8 @@ class DRCRunner:
             report=report,
             report_path=report_path,
             returncode=proc.returncode,
-            stdout=proc.stdout,
-            stderr=proc.stderr,
+            stdout=stdout,
+            stderr=stderr,
             duration_seconds=duration,
             klayout_binary=self._binary,
             strategy=strategy,

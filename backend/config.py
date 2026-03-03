@@ -26,7 +26,9 @@ def _find_klayout() -> str:
 
 # DRC settings
 KLAYOUT_BINARY = _find_klayout()
-DRC_TIMEOUT_SECONDS = 300
+DRC_TIMEOUT_SECONDS = 2700  # 45 min — large tiled runs at throttled CPU need headroom
+DRC_NICE_LEVEL = 10  # Lower scheduling priority (0-20, higher = nicer to other processes)
+DRC_CPU_LIMIT_PERCENT = 60  # Hard CPU cap via cpulimit (ignored if cpulimit not installed)
 
 # Grid
 DEFAULT_GRID_UM = 0.005
