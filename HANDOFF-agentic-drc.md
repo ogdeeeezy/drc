@@ -8,10 +8,10 @@ Open-source DRC (Design Rule Check) tool — PVS alternative for semiconductor l
 - **Adaptive DRC**: COMPLETE — auto-selects threads/mode by GDS file size
 - **CPU throttling**: COMPLETE — triple-layer (taskpolicy -b + nice + cpulimit at 60%)
 - **KLayout integration**: WORKING — macOS app bundle auto-detected
-- **303 tests** (286 unit + 17 integration), all passing
+- **286 unit tests + 17 integration**, all passing
 - **Frontend builds clean** (`cd frontend && npm run build`)
-- Python 3.12 venv at `.venv/`, all deps installed
 - **E2E validated**: 142MB SKY130 ESD file → 11 violations found in 19 min (throttled)
+- **GitHub**: https://github.com/ogdeeeezy/drc
 
 ## How to Run
 - Backend: `make run` (uvicorn on port 8000)
@@ -27,27 +27,31 @@ Open-source DRC (Design Rule Check) tool — PVS alternative for semiconductor l
 - **gdstk** for GDSII I/O, **pdk.json** for PDK-agnostic config
 - **Fix priority**: shorts > off-grid > width > spacing > enclosure > area > density
 - **SQLite WAL** for job persistence, versioned GDS export
-- **Memory**: ~64 bytes/polygon in GDS, KLayout stays <2GB RSS in tests
 
 ## Hot Files
-- `backend/core/drc_runner.py` — DRC runner, adaptive_strategy(), DEFAULT_DRC_FLAGS
-- `backend/config.py` — DRCStrategy dataclass, thresholds, _find_klayout()
+- `backend/core/drc_runner.py` — DRC runner, adaptive_strategy(), CPU throttling, DEFAULT_DRC_FLAGS
+- `backend/config.py` — DRCStrategy, thresholds, _find_klayout(), DRC_CPU_LIMIT_PERCENT
 - `backend/pdk/configs/sky130/sky130A_mr.drc` — SKY130 DRC deck (vendored, tracked)
-- `tests/integration/test_e2e_drc.py` — 8 e2e tests with real KLayout
-- `tests/integration/test_memory_profiling.py` — 9 memory profiling tests
+- `docs/plan-phase5.md` — Phase 5 plan (auto-fix, PCell, LVS)
+- `docs/pdk-authoring.md` — PDK authoring guide
 
 ## Gotchas
 - SKY130 DRC deck defaults ALL rule groups to disabled — `DEFAULT_DRC_FLAGS` in drc_runner.py fixes this
 - KLayout macOS app bundle needs Gatekeeper bypass: `sudo xattr -r -d com.apple.quarantine /Applications/KLayout/klayout.app`
-- DRC runs synchronously — blocks the uvicorn worker thread (uploads queue behind running DRC)
+- DRC runs synchronously — blocks the uvicorn worker thread (async is Phase 5 prerequisite)
 - `cpulimit` must be installed separately: `brew install cpulimit` (auto-detected at runtime)
-- No GitHub remote configured yet — local repo only
+- cpulimit alone doesn't work well on Apple Silicon — needs taskpolicy -b alongside it
 
-## What's Left
-- ~~PDK authoring guide~~ → DONE (`docs/pdk-authoring.md`)
-- Async DRC execution (currently blocks API thread)
-- Additional PDKs (GF180, ASAP7)
-- GitHub remote + CI pipeline setup
+## What's Next (Phase 5)
+Read `docs/plan-phase5.md` for full plan. Execution order:
+1. **Async DRC** (prerequisite, 1-2 days) — unblock API thread during DRC runs
+2. **Auto-fix loop** (3-5 days) — automated fix-apply-recheck with human audit trail
+3. **LVS checker** (2-3 weeks) — layout vs schematic verification
+4. **PCell generator** (2-3 weeks) — auto-generate DRC-clean GDS from component specs
+
+## Key Research Finding
+`pip install klayout` provides in-process DRC via `klayout.db` Region API — 100-1000x faster than subprocess. This enables Monte Carlo layout optimization (future build) without needing a custom geometry engine. See Session 8 notes in PROGRESS.
 
 ## Future Builds
-- **LLM-assisted DRC deck generator** — feed foundry DRM tables + KLayout DRC API docs to generate ~80% of rules automatically. Manual validation for complex conditional rules. Targets proprietary nodes where no open-source deck exists. Estimated 2-3 days per PDK vs 2-3 weeks manual. Approach: transcribe layer map → generate width/spacing/enclosure one-liners → manually handle density/antenna/conditional rules → validate against test GDS with intentional violations.
+- **LLM-assisted DRC deck generator** — feed DRM tables + KLayout API docs to auto-generate rules
+- **Monte Carlo layout optimization** — 10k+ geometric variants via klayout.db in-process, scored by parasitics, validated with SPICE

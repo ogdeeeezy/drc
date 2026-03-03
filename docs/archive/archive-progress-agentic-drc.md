@@ -108,3 +108,30 @@
 - Phase 4: Production Hardening (fix-apply re-DRC loop, SQLite, report export, Docker, density fill)
 - Install KLayout CLI for integration tests
 - Vendor SKY130 DRC deck
+
+---
+
+## Archived: 2026-03-03 | Git: 1ef1730
+
+### Session 6: 2026-03-03 — Adaptive DRC for resource-constrained environments
+
+#### Done
+- **Adaptive DRC strategy** — Auto-selects thread count and DRC mode (deep vs tiled) based on GDS file size. Three tiers: <20MB (4 threads, deep), 20-80MB (2 threads, deep), >80MB (1 thread, tiled 1000µm).
+- **DRC deck updated** — Conditional tiling in `sky130A_mr.drc` reads `$drc_mode` param.
+- **API response** — Includes `strategy` block with mode/threads/tile_size_um.
+- **12 new tests** — `TestAdaptiveStrategy` (7), `TestBuildCommandWithStrategy` (4), `TestRunIncludesStrategy` (1).
+
+#### Decisions
+- Strategy computed from `gds_path.stat().st_size` — no user input needed
+- DRC deck backward-compatible (defaults to deep if `$drc_mode` not set)
+
+### Session 5: 2026-03-02 — Phase 4 complete (Production Hardening)
+
+#### Done
+- **P4-1 through P4-5** — Fix-apply re-DRC loop, SQLite persistence (WAL), report export (JSON/CSV/HTML), Docker+CI/CD, density fill strategy.
+- **273 unit tests total**, all passing.
+
+#### Decisions
+- SQLite WAL mode for concurrent reads during DRC
+- `apply-and-recheck` endpoint auto-sets `complete` if violations reach 0
+- Density fill uses PDK spacing/width rules, 25% default target

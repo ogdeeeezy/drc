@@ -1,6 +1,31 @@
 # PROGRESS-agentic-drc
 
-> Sessions 1-4 archived → `docs/archive/archive-progress-agentic-drc.md`
+> Sessions 1-6 archived → `docs/archive/archive-progress-agentic-drc.md`
+
+---
+
+## Session 8: 2026-03-03 — CPU throttling, GitHub repo, PDK guide, Phase 5 plan
+
+### Done
+- **CPU throttling** (`1ef1730`) — Triple-layer: taskpolicy -b (macOS efficiency cores) + nice -n 10 + cpulimit -l 60%. Switched subprocess.run → Popen for PID access. Tested on 142MB ESD file.
+- **DRC timeout bumped** — 300s → 2700s (45 min) for throttled large file runs.
+- **E2E validated** — Full flow: upload 142MB SKY130 ESD → DRC (19 min throttled, tiled mode) → 11 violations found. All stages working.
+- **PDK authoring guide** — `docs/pdk-authoring.md`: schema reference, DRC deck template, validation steps, checklist.
+- **GitHub repo** — Created ogdeeeezy/drc, all commits pushed.
+- **Phase 5 plan** — `docs/plan-phase5.md`: auto-fix loop, PCell generator, LVS checker. 3 features, 13 stories.
+- **KLayout Python API research** — `pip install klayout` provides in-process DRC via Region API. 100-1000x faster than subprocess. Eliminates need for custom geometry engine for Monte Carlo.
+
+### Decisions
+- cpulimit alone ineffective on Apple Silicon — needs taskpolicy -b alongside it
+- DRC blocks API thread — async execution is prerequisite for Phase 5
+- Monte Carlo feasible via `klayout.db` Region.*_check() methods (no subprocess per sample)
+- Auto-fix needs human flags for: circuit intent, hallucination risk, cascading violations, irreversible changes, low confidence
+
+### Next
+- **Phase 5a**: Auto-fix loop (3-5 days) — see `docs/plan-phase5.md`
+- **Async DRC** prerequisite — move KLayout to background worker
+- **Phase 5b/5c** in parallel: LVS checker + PCell generator
+- Future: Monte Carlo layout optimization using klayout.db in-process
 
 ---
 
@@ -24,40 +49,3 @@
 - Consider async DRC execution (currently sync, blocks API thread)
 - Add more PDKs beyond SKY130 (GF180, ASAP7)
 - GitHub remote + CI setup
-
----
-
-## Session 6: 2026-03-03 — Adaptive DRC for resource-constrained environments
-
-### Done
-- **Adaptive DRC strategy** — Auto-selects thread count and DRC mode (deep vs tiled) based on GDS file size. Three tiers: <20MB (4 threads, deep), 20-80MB (2 threads, deep), >80MB (1 thread, tiled 1000µm).
-- **DRC deck updated** — Conditional tiling in `sky130A_mr.drc` reads `$drc_mode` param.
-- **API response** — Includes `strategy` block with mode/threads/tile_size_um.
-- **12 new tests** — `TestAdaptiveStrategy` (7), `TestBuildCommandWithStrategy` (4), `TestRunIncludesStrategy` (1).
-
-### Decisions
-- Strategy computed from `gds_path.stat().st_size` — no user input needed
-- DRC deck backward-compatible (defaults to deep if `$drc_mode` not set)
-
-### Next
-- Integration tests with real KLayout
-- Memory profiling
-- Vendor DRC deck
-
----
-
-## Session 5: 2026-03-02 — Phase 4 complete (Production Hardening)
-
-### Done
-- **P4-1 through P4-5** — Fix-apply re-DRC loop, SQLite persistence (WAL), report export (JSON/CSV/HTML), Docker+CI/CD, density fill strategy.
-- **273 unit tests total**, all passing.
-
-### Decisions
-- SQLite WAL mode for concurrent reads during DRC
-- `apply-and-recheck` endpoint auto-sets `complete` if violations reach 0
-- Density fill uses PDK spacing/width rules, 25% default target
-
-### Next
-- KLayout CLI for integration tests
-- Vendor SKY130 DRC deck
-- PDK authoring guide
