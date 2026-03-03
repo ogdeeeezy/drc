@@ -14,7 +14,7 @@ from backend.core.layout import LayoutManager
 from backend.core.spatial_index import SpatialIndex
 from backend.core.violation_parser import ViolationParser
 from backend.export.gdsii import export_fixed_gds
-from backend.fix.autofix import AutoFixRunner
+from backend.fix.autofix import AutoFixRunner, _write_provenance
 from backend.fix.engine import FixEngine, FixEngineResult
 from backend.jobs.manager import JobStatus
 
@@ -249,6 +249,17 @@ async def apply_and_recheck(job_id: str, request: ApplyFixRequest):
     layout_mgr.load(gds_path)
     applied = _apply_deltas(layout_mgr, result, request.suggestion_indices)
 
+    # Write provenance for manually applied fixes
+    for idx in request.suggestion_indices:
+        suggestion = result.suggestions[idx]
+        _write_provenance(
+            manager,
+            job_id,
+            job.iteration,
+            suggestion,
+            action="auto_applied",
+        )
+
     # Step 2: Save versioned fixed GDS
     job_dir = manager.job_dir(job_id)
     original_stem = Path(job.filename).stem
@@ -372,6 +383,41 @@ def _points_match(
     return all(
         abs(p1[0] - p2[0]) < tolerance and abs(p1[1] - p2[1]) < tolerance for p1, p2 in zip(a, b)
     )
+
+
+@router.get("/{job_id}/fix/provenance")
+async def get_provenance(job_id: str, iteration: int | None = None):
+    """Get fix provenance records for a job, optionally filtered by iteration."""
+    manager = get_job_manager()
+    try:
+        manager.get(job_id)
+    except KeyError:
+        raise HTTPException(404, f"Job '{job_id}' not found")
+
+    records = manager.get_provenance(job_id, iteration=iteration)
+    return {
+        "job_id": job_id,
+        "total_records": len(records),
+        "records": [
+            {
+                "id": r["id"],
+                "iteration": r["iteration"],
+                "rule_id": r["rule_id"],
+                "violation_category": r["violation_category"],
+                "rule_type": r["rule_type"],
+                "confidence": r["confidence"],
+                "action": r["action"],
+                "flag_reason": r["flag_reason"],
+                "before_points": r["before_points"],
+                "after_points": r["after_points"],
+                "cell_name": r["cell_name"],
+                "gds_layer": r["gds_layer"],
+                "gds_datatype": r["gds_datatype"],
+                "created_at": r["created_at"],
+            }
+            for r in records
+        ],
+    }
 
 
 @router.post("/{job_id}/fix/auto")

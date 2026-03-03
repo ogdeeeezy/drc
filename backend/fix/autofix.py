@@ -89,6 +89,33 @@ def _flag_reason(suggestion: FixSuggestion, confidence_threshold: str) -> str:
     return "circuit_intent_unknown"
 
 
+def _write_provenance(
+    manager: "JobManager",
+    job_id: str,
+    iteration: int,
+    suggestion: FixSuggestion,
+    action: str,
+    flag_reason: str | None = None,
+) -> None:
+    """Write provenance records for each delta in a suggestion."""
+    for delta in suggestion.deltas:
+        manager.insert_provenance(
+            job_id=job_id,
+            iteration=iteration,
+            rule_id=suggestion.violation_category,
+            violation_category=suggestion.violation_category,
+            rule_type=suggestion.rule_type,
+            confidence=suggestion.confidence.value,
+            action=action,
+            flag_reason=flag_reason,
+            before_points=delta.original_points,
+            after_points=delta.modified_points,
+            cell_name=delta.cell_name,
+            gds_layer=delta.gds_layer,
+            gds_datatype=delta.gds_datatype,
+        )
+
+
 def _apply_deltas_from_suggestions(
     layout_mgr: LayoutManager,
     suggestions: list[FixSuggestion],
@@ -241,6 +268,18 @@ class AutoFixRunner:
             iter_flagged = len(flagged)
             result.fixes_flagged_count += iter_flagged
 
+            # Write provenance for flagged fixes
+            for suggestion in flagged:
+                reason = _flag_reason(suggestion, confidence_threshold)
+                _write_provenance(
+                    self._manager,
+                    job.job_id,
+                    iteration_num,
+                    suggestion,
+                    action="flagged",
+                    flag_reason=reason,
+                )
+
             # Step 3: Check for stall (no applicable fixes)
             if len(auto_apply) == 0:
                 result.stop_reason = "stall"
@@ -259,6 +298,16 @@ class AutoFixRunner:
             layout_mgr_apply.load(current_gds_path)
             applied = _apply_deltas_from_suggestions(layout_mgr_apply, auto_apply)
             result.fixes_applied_count += applied
+
+            # Write provenance for auto-applied fixes
+            for suggestion in auto_apply:
+                _write_provenance(
+                    self._manager,
+                    job.job_id,
+                    iteration_num,
+                    suggestion,
+                    action="auto_applied",
+                )
 
             # Step 5: Export fixed GDS
             new_iteration = job.iteration + iteration_num

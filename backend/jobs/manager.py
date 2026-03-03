@@ -124,3 +124,20 @@ class JobManager:
         d = self._jobs_dir / job_id
         d.mkdir(parents=True, exist_ok=True)
         return d
+
+    def insert_provenance(self, **kwargs) -> int:
+        """Insert a fix provenance record. Delegates to Database."""
+        return self._db.insert_provenance(**kwargs)
+
+    def get_provenance(
+        self,
+        job_id: str,
+        iteration: int | None = None,
+        action: str | None = None,
+    ) -> list[dict]:
+        """Get provenance records for a job."""
+        return self._db.get_provenance(job_id, iteration=iteration, action=action)
+
+    def update_provenance_action(self, provenance_id: int, new_action: str) -> None:
+        """Update the action field on a provenance record."""
+        self._db.update_provenance_action(provenance_id, new_action)

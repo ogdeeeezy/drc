@@ -605,6 +605,138 @@ class TestAutoFixRunner:
 # ── API Route test ────────────────────────────────────────
 
 
+class TestAutoFixProvenance:
+    """Verify provenance records are written during auto-fix runs."""
+
+    async def test_provenance_written_for_applied_and_flagged(
+        self, manager, pdk, job_with_drc, tmp_dir
+    ):
+        """Auto-fix writes provenance for both applied and flagged fixes."""
+        job = job_with_drc
+        job_dir = manager.job_dir(job.job_id)
+
+        suggestions = [
+            _make_suggestion(FixConfidence.high, category="m1.1"),
+            _make_suggestion(FixConfidence.high, category="m1.2"),
+            _make_suggestion(FixConfidence.low, category="m1.3"),
+        ]
+        from backend.fix.engine import FixEngineResult
+
+        fix_result = FixEngineResult(suggestions=suggestions)
+
+        clean_report_path = job_dir / "clean_drc.lyrdb"
+        clean_drc_result = _make_drc_result(clean_report_path, 0)
+
+        with (
+            patch("backend.fix.autofix.FixEngine") as MockEngine,
+            patch("backend.fix.autofix.DRCRunner") as MockDRCRunner,
+            patch("backend.fix.autofix.LayoutManager"),
+            patch("backend.fix.autofix.SpatialIndex"),
+            patch("backend.fix.autofix.export_fixed_gds") as mock_export,
+            patch("backend.fix.autofix._apply_deltas_from_suggestions", return_value=2),
+        ):
+            MockEngine.return_value.suggest_fixes.return_value = fix_result
+            MockDRCRunner.return_value.async_run = AsyncMock(return_value=clean_drc_result)
+            mock_export.return_value = job_dir / "test_fixed.gds"
+            (job_dir / "test_fixed.gds").write_bytes(b"fake")
+
+            runner = AutoFixRunner(manager, pdk, job)
+            result = await runner.run(confidence_threshold="high", max_iterations=10)
+
+        assert result.stop_reason == "drc_clean"
+
+        # Check provenance records
+        all_prov = manager.get_provenance(job.job_id)
+        assert len(all_prov) == 3  # 2 applied + 1 flagged
+
+        applied = manager.get_provenance(job.job_id, action="auto_applied")
+        assert len(applied) == 2
+        assert {r["violation_category"] for r in applied} == {"m1.1", "m1.2"}
+        for r in applied:
+            assert r["action"] == "auto_applied"
+            assert r["flag_reason"] is None
+            assert r["iteration"] == 1
+
+        flagged = manager.get_provenance(job.job_id, action="flagged")
+        assert len(flagged) == 1
+        assert flagged[0]["violation_category"] == "m1.3"
+        assert flagged[0]["flag_reason"] == "low_confidence"
+        assert flagged[0]["confidence"] == "low"
+
+    async def test_provenance_records_have_coordinates(
+        self, manager, pdk, job_with_drc, tmp_dir
+    ):
+        """Provenance before/after points are stored as coordinate arrays."""
+        job = job_with_drc
+        job_dir = manager.job_dir(job.job_id)
+
+        suggestions = [_make_suggestion(FixConfidence.high)]
+        from backend.fix.engine import FixEngineResult
+
+        fix_result = FixEngineResult(suggestions=suggestions)
+
+        clean_report_path = job_dir / "clean_drc.lyrdb"
+        clean_drc_result = _make_drc_result(clean_report_path, 0)
+
+        with (
+            patch("backend.fix.autofix.FixEngine") as MockEngine,
+            patch("backend.fix.autofix.DRCRunner") as MockDRCRunner,
+            patch("backend.fix.autofix.LayoutManager"),
+            patch("backend.fix.autofix.SpatialIndex"),
+            patch("backend.fix.autofix.export_fixed_gds") as mock_export,
+            patch("backend.fix.autofix._apply_deltas_from_suggestions", return_value=1),
+        ):
+            MockEngine.return_value.suggest_fixes.return_value = fix_result
+            MockDRCRunner.return_value.async_run = AsyncMock(return_value=clean_drc_result)
+            mock_export.return_value = job_dir / "test_fixed.gds"
+            (job_dir / "test_fixed.gds").write_bytes(b"fake")
+
+            runner = AutoFixRunner(manager, pdk, job)
+            await runner.run(confidence_threshold="high", max_iterations=10)
+
+        records = manager.get_provenance(job.job_id)
+        assert len(records) == 1
+        r = records[0]
+        assert r["before_points"] == [[0.0, 0.0], [0.1, 0.0], [0.1, 1.0], [0.0, 1.0]]
+        assert r["after_points"] == [[0.0, 0.0], [0.14, 0.0], [0.14, 1.0], [0.0, 1.0]]
+        assert r["cell_name"] == "TOP"
+        assert r["gds_layer"] == 68
+        assert r["gds_datatype"] == 20
+
+    async def test_provenance_filter_by_iteration(
+        self, manager, pdk, job_with_drc, tmp_dir
+    ):
+        """GET provenance with iteration filter returns correct subset."""
+        job = job_with_drc
+
+        # Manually insert provenance records for two iterations
+        manager.insert_provenance(
+            job_id=job.job_id, iteration=1, rule_id="m1.1",
+            violation_category="m1.1", rule_type="min_width",
+            confidence="high", action="auto_applied",
+            before_points=[], after_points=[], cell_name="TOP",
+            gds_layer=68, gds_datatype=20,
+        )
+        manager.insert_provenance(
+            job_id=job.job_id, iteration=2, rule_id="m1.2",
+            violation_category="m1.2", rule_type="min_spacing",
+            confidence="medium", action="flagged", flag_reason="medium_confidence_in_high_mode",
+            before_points=[], after_points=[], cell_name="TOP",
+            gds_layer=68, gds_datatype=20,
+        )
+
+        all_records = manager.get_provenance(job.job_id)
+        assert len(all_records) == 2
+
+        iter1 = manager.get_provenance(job.job_id, iteration=1)
+        assert len(iter1) == 1
+        assert iter1[0]["rule_id"] == "m1.1"
+
+        iter2 = manager.get_provenance(job.job_id, iteration=2)
+        assert len(iter2) == 1
+        assert iter2[0]["rule_id"] == "m1.2"
+
+
 class TestAutoFixEndpoint:
     def test_auto_fix_no_gds(self):
         """Auto-fix returns 400 if no GDS file."""
@@ -667,6 +799,179 @@ class TestAutoFixEndpoint:
                         "/api/jobs/nonexistent/fix/auto",
                         json={"confidence_threshold": "high"},
                     )
+                    assert r.status_code == 404
+            finally:
+                cfg.JOBS_DIR = original_jobs
+                cfg.UPLOAD_DIR = original_uploads
+                deps.reset_deps()
+
+
+class TestProvenanceEndpoint:
+    def test_get_provenance_empty(self):
+        """GET provenance returns empty list for job with no records."""
+        from fastapi.testclient import TestClient
+
+        from backend.api import deps
+        from backend.main import app
+
+        deps.reset_deps()
+
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            import backend.config as cfg
+
+            original_jobs = cfg.JOBS_DIR
+            original_uploads = cfg.UPLOAD_DIR
+            cfg.JOBS_DIR = tmp / "jobs"
+            cfg.UPLOAD_DIR = tmp / "uploads"
+            cfg.JOBS_DIR.mkdir()
+            cfg.UPLOAD_DIR.mkdir()
+
+            try:
+                with TestClient(app) as client:
+                    manager = deps.get_job_manager()
+                    job = manager.create("test.gds", "sky130")
+
+                    r = client.get(f"/api/jobs/{job.job_id}/fix/provenance")
+                    assert r.status_code == 200
+                    data = r.json()
+                    assert data["job_id"] == job.job_id
+                    assert data["total_records"] == 0
+                    assert data["records"] == []
+            finally:
+                cfg.JOBS_DIR = original_jobs
+                cfg.UPLOAD_DIR = original_uploads
+                deps.reset_deps()
+
+    def test_get_provenance_with_records(self):
+        """GET provenance returns inserted records."""
+        from fastapi.testclient import TestClient
+
+        from backend.api import deps
+        from backend.main import app
+
+        deps.reset_deps()
+
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            import backend.config as cfg
+
+            original_jobs = cfg.JOBS_DIR
+            original_uploads = cfg.UPLOAD_DIR
+            cfg.JOBS_DIR = tmp / "jobs"
+            cfg.UPLOAD_DIR = tmp / "uploads"
+            cfg.JOBS_DIR.mkdir()
+            cfg.UPLOAD_DIR.mkdir()
+
+            try:
+                with TestClient(app) as client:
+                    manager = deps.get_job_manager()
+                    job = manager.create("test.gds", "sky130")
+
+                    manager.insert_provenance(
+                        job_id=job.job_id, iteration=1, rule_id="m1.1",
+                        violation_category="m1.1", rule_type="min_width",
+                        confidence="high", action="auto_applied",
+                        before_points=[[0, 0], [1, 0]],
+                        after_points=[[0, 0], [1.4, 0]],
+                        cell_name="TOP", gds_layer=68, gds_datatype=20,
+                    )
+                    manager.insert_provenance(
+                        job_id=job.job_id, iteration=1, rule_id="m1.2",
+                        violation_category="m1.2", rule_type="min_spacing",
+                        confidence="low", action="flagged", flag_reason="low_confidence",
+                        before_points=[[2, 2], [3, 2]],
+                        after_points=[[2, 2], [3.5, 2]],
+                        cell_name="TOP", gds_layer=68, gds_datatype=20,
+                    )
+
+                    r = client.get(f"/api/jobs/{job.job_id}/fix/provenance")
+                    assert r.status_code == 200
+                    data = r.json()
+                    assert data["total_records"] == 2
+
+                    rec0 = data["records"][0]
+                    assert rec0["action"] == "auto_applied"
+                    assert rec0["rule_id"] == "m1.1"
+                    assert rec0["before_points"] == [[0, 0], [1, 0]]
+                    assert rec0["after_points"] == [[0, 0], [1.4, 0]]
+
+                    rec1 = data["records"][1]
+                    assert rec1["action"] == "flagged"
+                    assert rec1["flag_reason"] == "low_confidence"
+            finally:
+                cfg.JOBS_DIR = original_jobs
+                cfg.UPLOAD_DIR = original_uploads
+                deps.reset_deps()
+
+    def test_get_provenance_filter_iteration(self):
+        """GET provenance?iteration=2 filters correctly."""
+        from fastapi.testclient import TestClient
+
+        from backend.api import deps
+        from backend.main import app
+
+        deps.reset_deps()
+
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            import backend.config as cfg
+
+            original_jobs = cfg.JOBS_DIR
+            original_uploads = cfg.UPLOAD_DIR
+            cfg.JOBS_DIR = tmp / "jobs"
+            cfg.UPLOAD_DIR = tmp / "uploads"
+            cfg.JOBS_DIR.mkdir()
+            cfg.UPLOAD_DIR.mkdir()
+
+            try:
+                with TestClient(app) as client:
+                    manager = deps.get_job_manager()
+                    job = manager.create("test.gds", "sky130")
+
+                    for i in range(1, 4):
+                        manager.insert_provenance(
+                            job_id=job.job_id, iteration=i, rule_id=f"m1.{i}",
+                            violation_category=f"m1.{i}", rule_type="min_width",
+                            confidence="high", action="auto_applied",
+                            before_points=[], after_points=[],
+                            cell_name="TOP", gds_layer=68, gds_datatype=20,
+                        )
+
+                    r = client.get(f"/api/jobs/{job.job_id}/fix/provenance?iteration=2")
+                    assert r.status_code == 200
+                    data = r.json()
+                    assert data["total_records"] == 1
+                    assert data["records"][0]["iteration"] == 2
+                    assert data["records"][0]["rule_id"] == "m1.2"
+            finally:
+                cfg.JOBS_DIR = original_jobs
+                cfg.UPLOAD_DIR = original_uploads
+                deps.reset_deps()
+
+    def test_get_provenance_not_found(self):
+        """GET provenance returns 404 for unknown job."""
+        from fastapi.testclient import TestClient
+
+        from backend.api import deps
+        from backend.main import app
+
+        deps.reset_deps()
+
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            import backend.config as cfg
+
+            original_jobs = cfg.JOBS_DIR
+            original_uploads = cfg.UPLOAD_DIR
+            cfg.JOBS_DIR = tmp / "jobs"
+            cfg.UPLOAD_DIR = tmp / "uploads"
+            cfg.JOBS_DIR.mkdir()
+            cfg.UPLOAD_DIR.mkdir()
+
+            try:
+                with TestClient(app) as client:
+                    r = client.get("/api/jobs/nonexistent/fix/provenance")
                     assert r.status_code == 404
             finally:
                 cfg.JOBS_DIR = original_jobs
