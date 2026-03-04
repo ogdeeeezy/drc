@@ -13,3 +13,5 @@ data/jobs/
 *.lyrdb
 node_modules/
 .env
+.coverage
+.agent/
