@@ -2,6 +2,21 @@
 
 ---
 
+## Archived: 2026-03-04 | Git: affd54d
+
+### Session 14: 2026-03-04 — CI/CD enhancement + API test coverage
+
+#### Done
+- **CI/CD enhanced** (`7881088`) — Split lint job, added pytest-cov, KLayout integration job (continue-on-error), concurrency group. `pytest-cov>=5.0` added to dev deps.
+- **API route test coverage** (`01d1ef0`) — 69 new tests covering error paths across all API routes (drc, export, fix, layout, lvs, upload). Coverage 86% → 91%. 665 unit tests passing.
+- **Coverage analysis documented** — Added practical limits note to `docs/tmp-cicd-plan.md`: 95% achievable, true 100% impractical due to KLayout subprocess paths and OS-specific config.
+
+#### Decisions
+- Target 95% coverage floor, not 100% — remaining 9% is defensive error handling best verified by integration tests
+- CI integration job uses `continue-on-error: true` — KLayout apt install may not work on all GitHub runners
+
+---
+
 ## Archived: 2026-03-04 | Git: 88a7d06
 
 ### Session 12: 2026-03-04 — MOSFET met1 DRC-clean (m1.2 + m1.6)

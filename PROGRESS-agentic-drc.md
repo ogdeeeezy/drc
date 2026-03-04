@@ -4,6 +4,26 @@
 
 ---
 
+## Session 17: 2026-03-04 — Error hints implementation + branch protection
+
+### Done
+- **Error hints implemented** (`affd54d`) — Centralized `error_hints.py` with 14 regex→hint rules, `hint` field on Job model + DB schema (with ALTER TABLE migration), route wiring in drc.py/lvs.py, amber hint box UI in frontend. 730 tests, 95% coverage.
+- **OSError runner tests** — 4 new tests each for DRC/LVS runners covering exec format error and permission denied paths (sync + async).
+- **Error hints test suite** — 19 tests covering all regex patterns, edge cases, first-match-wins behavior.
+- **Branch protection enabled** — GitHub API: `lint`, `test`, `frontend` required checks on `main`, strict mode, force push blocked.
+- **Tagged release** — `pre-llm-deck-gen-pre-mc` tag on `affd54d`.
+
+### Decisions
+- Branch protection enforce_admins left OFF so owner can push directly when needed
+- `integration` check excluded from required checks (uses continue-on-error due to KLayout availability)
+
+### Next
+- Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
+- LLM-assisted DRC deck generator — auto-generate rules from DRM tables
+- More PDKs — GF180, ASAP7 (solidify SKY130 framework first)
+
+---
+
 ## Session 16: 2026-03-04 — Error hints plan + coverage gap analysis
 
 ### Done
@@ -15,9 +35,7 @@
 - Always-visible hint box (amber below red error) over hover tooltip — more accessible, no hidden info
 
 ### Next
-- **Implement error hints plan** — `docs/tmp-error-hints-plan.md` has full spec. Start with `error_hints.py` + tests, then Job model, then routes, then frontend.
-- Branch protection — Enable in GitHub repo settings
-- Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
+- Implement error hints plan (done in Session 17)
 
 ---
 
@@ -29,19 +47,3 @@
 
 ### Next
 - Error hints + remaining coverage (done in Session 16 planning)
-
----
-
-## Session 14: 2026-03-04 — CI/CD enhancement + API test coverage
-
-### Done
-- **CI/CD enhanced** (`7881088`) — Split lint job, added pytest-cov, KLayout integration job (continue-on-error), concurrency group. `pytest-cov>=5.0` added to dev deps.
-- **API route test coverage** (`01d1ef0`) — 69 new tests covering error paths across all API routes (drc, export, fix, layout, lvs, upload). Coverage 86% → 91%. 665 unit tests passing.
-- **Coverage analysis documented** — Added practical limits note to `docs/tmp-cicd-plan.md`: 95% achievable, true 100% impractical due to KLayout subprocess paths and OS-specific config.
-
-### Decisions
-- Target 95% coverage floor, not 100% — remaining 9% is defensive error handling best verified by integration tests
-- CI integration job uses `continue-on-error: true` — KLayout apt install may not work on all GitHub runners
-
-### Next
-- Fix strategy tests (done in Session 15)

@@ -5,28 +5,28 @@ Open-source DRC tool — PVS alternative for semiconductor layout verification. 
 
 ## Current State
 - **Phases 1-5**: ALL COMPLETE (33/33 stories)
-- **703 unit + 12 E2E tests passing**, 94% coverage, frontend builds clean
+- **730 unit + 12 E2E tests passing**, 95% coverage, frontend builds clean
 - **GitHub**: https://github.com/ogdeeeezy/drc — all pushed to main
-- **All PCells DRC-clean**, CI/CD enhanced with lint/test/integration/frontend jobs
+- **Branch protection**: `lint`, `test`, `frontend` required on main (strict mode)
+- **Tagged**: `pre-llm-deck-gen-pre-mc` on `affd54d`
+- **Error hints**: Centralized regex→hint mapping gives users actionable guidance on failures
 
 ## How to Run
 - Backend: `make run` (uvicorn on port 8000)
 - Frontend: `make frontend` (Vite dev on 5173, proxies /api)
-- Tests: `.venv/bin/python -m pytest tests/unit/ -q --cov=backend` (703 tests, 94%)
+- Tests: `.venv/bin/python -m pytest tests/unit/ -q --cov=backend` (730 tests, 95%)
 - E2E: `.venv/bin/python -m pytest tests/integration/test_e2e_phase5.py -v -s` (requires KLayout)
 
 ## Immediate Next
-- **Implement error hints** — Full plan at `docs/tmp-error-hints-plan.md`. Adds centralized `error_hints.py` (regex→hint mapping), `hint` field on Job model/DB, route wiring, amber tooltip UI. ~270 lines, 10 files. Start with `error_hints.py` + tests.
-- **Branch protection** — Enable in GitHub repo settings (manual): require `lint`, `test`, `frontend` to pass
-- **Monte Carlo optimization** — klayout.db in-process for 10k+ geometric variants
-- **LLM-assisted DRC deck generator** — auto-generate rules from DRM tables
+- **Monte Carlo optimization** — klayout.db in-process for 10k+ geometric variants (no subprocess per sample)
+- **LLM-assisted DRC deck generator** — auto-generate KLayout rules from DRM tables
 - **More PDKs** — GF180, ASAP7 (solidify SKY130 framework first)
 
-## Key Test Files
-- `tests/unit/test_fix_strategies.py` — 59 strategy tests (21 original + 38 extended coverage)
+## Key Files
+- `backend/core/error_hints.py` — Centralized error→hint regex mapping
+- `tests/unit/test_error_hints.py` — 19 hint tests
+- `tests/unit/test_fix_strategies.py` — 59 strategy tests
 - `tests/unit/test_api_coverage.py` — 69 API route tests
-- `docs/tmp-cicd-plan.md` — CI/CD plan + coverage analysis
-- `docs/tmp-error-hints-plan.md` — Error hints implementation plan (READY TO IMPLEMENT)
 
 ## E2E Results (Current)
 ```
