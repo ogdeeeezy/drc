@@ -1,0 +1,151 @@
+{
+  "id": "phase-5b-lvs",
+  "title": "Phase 5b: LVS Checker (Layout vs Schematic)",
+  "description": "Add Layout vs Schematic (LVS) verification to agentic-drc. Users upload a GDSII layout and a SPICE netlist, and the system verifies that the layout implements the same circuit. Uses KLayout's built-in LVS engine via the same subprocess pattern as DRC. Parses the .lvsdb report to extract device mismatches, net mismatches, and pin mismatches. Includes a frontend mismatch viewer.",
+  "version": "1.0.0",
+  "status": "draft",
+  "created": "2026-03-03",
+  "updated": "2026-03-03",
+  "branchName": "ralph/phase-5b-lvs",
+  "parent_prd": "docs/plan-phase5.md",
+  "phase": "5b",
+  "depends_on": [],
+  "tech_stack": {
+    "language": "python 3.12+",
+    "framework": "FastAPI + uvicorn",
+    "database": "SQLite WAL",
+    "lvs_engine": "KLayout LVS batch mode subprocess",
+    "frontend": "React + Vite (existing)",
+    "existing_reuse": [
+      "DRCRunner pattern (backend/core/drc_runner.py) — same subprocess + throttling approach",
+      "ViolationParser pattern (backend/core/violation_parser.py) — XML parsing",
+      "Database (backend/jobs/database.py) — job persistence",
+      "JobManager (backend/jobs/manager.py) — status transitions",
+      "config.py — KLAYOUT_BINARY, CPU throttling constants"
+    ]
+  },
+  "success_criteria": [
+    "User can upload a SPICE netlist and run LVS against an existing DRC job's layout",
+    "LVS report is parsed into structured device-level and net-level mismatches",
+    "SKY130 LVS deck correctly extracts NMOS, PMOS, resistors, and capacitors from layout",
+    "Frontend displays mismatch list with device and net comparison",
+    "All existing 303+ tests still pass, no regressions"
+  ],
+  "not_in_scope": [
+    "LVS for PDKs other than SKY130 (future: GF180, ASAP7)",
+    "Schematic editor or netlist generator",
+    "Automatic LVS fix suggestions",
+    "Cross-reference between DRC violations and LVS mismatches"
+  ],
+  "userStories": [
+    {
+      "id": "P5-LV-001",
+      "title": "LVS Runner (Subprocess)",
+      "description": "As a developer, I want an LVSRunner class that executes KLayout LVS in batch mode as a subprocess, mirroring DRCRunner's architecture. KLayout LVS command: `klayout -b -r deck.lvs -rd input=layout.gds -rd schematic=circuit.spice -rd report=lvs.lvsdb`. The runner handles: binary detection, command building, CPU throttling (same triple-layer as DRC), timeout enforcement, and result collection.",
+      "acceptanceCriteria": [
+        "LVSRunner class in backend/core/lvs_runner.py with same __init__(klayout_binary, timeout) pattern as DRCRunner",
+        "run(gds_path, netlist_path, pdk, output_dir) method executes KLayout LVS subprocess",
+        "Command built as: klayout -b -r <deck.lvs> -rd input=<gds> -rd schematic=<spice> -rd report=<lvsdb>",
+        "CPU throttling applied: taskpolicy -b (macOS) + nice + cpulimit, same as DRCRunner",
+        "Async execution via asyncio.create_subprocess_exec (consistent with Phase 5a async DRC)",
+        "Timeout enforced (default 2700s), process killed on timeout, raises LVSError",
+        "LVSResult dataclass returned: report_path, returncode, stdout, stderr, duration_seconds, match (bool)",
+        "LVSError exception class with returncode and stderr fields",
+        "Test: mock subprocess → verify command built correctly with all -rd parameters",
+        "Test: timeout → verify process killed and LVSError raised"
+      ],
+      "priority": "P0",
+      "estimate": "M",
+      "passes": true,
+      "notes": "Mirror backend/core/drc_runner.py closely. The LVS deck file lives in backend/pdk/configs/sky130/ alongside the DRC deck. LVS report format is .lvsdb (XML, different schema from .lyrdb DRC reports). The get_lvs_deck_path() method resolves the deck file from PDKConfig — add klayout_lvs_deck field to PDKConfig schema.",
+      "dependsOn": []
+    },
+    {
+      "id": "P5-LV-002",
+      "title": "LVS Report Parser (.lvsdb XML)",
+      "description": "As a developer, I want to parse KLayout's .lvsdb report file into structured Python objects representing device mismatches, net mismatches, and pin mismatches. The .lvsdb format is XML with a different schema from .lyrdb (DRC reports). Need to extract: matched/unmatched devices, matched/unmatched nets, pin assignment errors, and overall match/nomatch status.",
+      "acceptanceCriteria": [
+        "LVSReportParser class in backend/core/lvs_parser.py",
+        "parse_file(path) method returns LVSReport dataclass",
+        "LVSReport contains: match (bool), devices_matched (int), devices_mismatched (int), nets_matched (int), nets_mismatched (int), mismatches (list[LVSMismatch])",
+        "LVSMismatch dataclass with: type (missing_device|extra_device|net_mismatch|pin_mismatch|parameter_mismatch), name, expected (str), actual (str), details (str)",
+        "Device mismatches include: device type (nmos/pmos/res/cap), expected parameters (W, L), actual extracted parameters",
+        "Net mismatches include: layout net name, schematic net name, connection difference",
+        "Parser handles empty report (no mismatches = match)",
+        "Parser handles malformed XML gracefully (raises LVSParseError with context)",
+        "Test with sample .lvsdb XML fixture: verify all mismatches extracted correctly",
+        "Test with clean .lvsdb: verify match=true, mismatches=[]"
+      ],
+      "priority": "P0",
+      "estimate": "M",
+      "passes": true,
+      "notes": "Study KLayout's .lvsdb XML format — it uses nested <item> elements with category attributes. Similar parsing approach to ViolationParser (backend/core/violation_parser.py) but different XML schema. Create test fixtures in tests/fixtures/ with sample .lvsdb files (one clean, one with mismatches). Models go in backend/core/lvs_models.py.",
+      "dependsOn": []
+    },
+    {
+      "id": "P5-LV-003",
+      "title": "SKY130 LVS Deck",
+      "description": "As a user running LVS on SKY130 layouts, I need a KLayout LVS deck that defines device extraction rules: which GDS layers form NMOS/PMOS transistors, poly resistors, MIM capacitors, and how nets are connected through vias and metal layers. This is the PDK-specific knowledge that tells KLayout how to interpret the layout as a circuit.",
+      "acceptanceCriteria": [
+        "LVS deck file at backend/pdk/configs/sky130/sky130A.lvs",
+        "Extracts NMOS devices from: nwell, diffusion, poly layers with correct SKY130 layer numbers",
+        "Extracts PMOS devices from: pwell (or substrate), diffusion, poly layers",
+        "Extracts poly resistors from: poly + resistor ID layers",
+        "Defines connectivity: metal1 through metal5, via1-via4, contacts, local interconnect",
+        "Compares extracted netlist against input SPICE schematic",
+        "Outputs .lvsdb report file at the path specified by -rd report= parameter",
+        "PDKConfig for sky130 updated with klayout_lvs_deck field pointing to this file",
+        "pdk.json schema updated to include optional klayout_lvs_deck field",
+        "Test: run LVS with the deck on a known-good SKY130 inverter layout+schematic → match=true",
+        "Test: run LVS on layout with missing device → match=false, reports missing_device mismatch"
+      ],
+      "priority": "P0",
+      "estimate": "L",
+      "passes": true,
+      "notes": "This is the hardest story — requires deep SKY130 PDK knowledge. Reference: the SKY130 DRC deck at backend/pdk/configs/sky130/sky130A_mr.drc for layer number conventions. KLayout LVS deck syntax uses: extract_devices(), connect(), compare(). The SKY130 open-source PDK may have existing LVS decks we can reference/vendor. Need test fixtures: a simple inverter (1 NMOS + 1 PMOS) as both GDS and SPICE.",
+      "dependsOn": ["P5-LV-001"]
+    },
+    {
+      "id": "P5-LV-004",
+      "title": "LVS API Endpoints",
+      "description": "As a user, I want API endpoints to upload a SPICE netlist, run LVS against a job's layout, and retrieve mismatch results. The flow: user has an existing DRC job with a GDS layout → uploads netlist → runs LVS → gets structured mismatch report.",
+      "acceptanceCriteria": [
+        "POST /api/jobs/{job_id}/lvs/upload accepts SPICE netlist file upload, stores alongside GDS",
+        "POST /api/jobs/{job_id}/lvs/run triggers LVS (async, returns immediately like DRC)",
+        "Job status includes LVS state: lvs_running → lvs_complete or lvs_failed",
+        "GET /api/jobs/{job_id}/lvs/results returns parsed LVS report: match, device/net counts, mismatches list",
+        "Each mismatch in response includes: type, name, expected, actual, details",
+        "LVS requires DRC to have been run first (need the GDS path from job) — return 400 if no GDS",
+        "Netlist path stored in jobs table (add netlist_path column)",
+        "Error handling: missing netlist → 400, LVS timeout → 500 with explanation, no KLayout → 500",
+        "Test: upload netlist → run LVS → poll status → get results → verify mismatch structure"
+      ],
+      "priority": "P0",
+      "estimate": "M",
+      "passes": true,
+      "notes": "New route file: backend/api/routes/lvs.py. Register in main.py. Add netlist_path column to jobs schema in database.py. LVS run uses async LVSRunner (from P5-LV-001). Results stored in a separate lvs_reports table or as a JSON file alongside the .lvsdb. Follow the same pattern as drc.py routes.",
+      "dependsOn": ["P5-LV-001", "P5-LV-002", "P5-LV-003"]
+    },
+    {
+      "id": "P5-LV-005",
+      "title": "Frontend LVS Mismatch Viewer",
+      "description": "As a user, I want to see LVS results in the frontend with a clear match/nomatch status and a mismatch list showing device-level and net-level comparison. The viewer should make it easy to understand what's different between the layout and the schematic.",
+      "acceptanceCriteria": [
+        "LVS section appears in job detail page when LVS has been run",
+        "Match/nomatch banner with green check or red X",
+        "Summary stats: devices matched/mismatched, nets matched/mismatched",
+        "Mismatch table with columns: Type, Name, Expected, Actual, Details",
+        "Mismatch types are color-coded or icon-coded: missing_device (red), extra_device (orange), net_mismatch (yellow), pin_mismatch (blue), parameter_mismatch (grey)",
+        "Netlist upload form integrated into job detail page (file input for .spice/.sp files)",
+        "Run LVS button (disabled until netlist uploaded, shows spinner while running)",
+        "Frontend builds clean: npm run build succeeds with no TypeScript errors",
+        "Responsive layout — mismatch table scrollable on small screens"
+      ],
+      "priority": "P1",
+      "estimate": "M",
+      "passes": true,
+      "notes": "Existing frontend is React + Vite at /frontend. Follow existing component patterns for the DRC violation viewer. LVS API calls: POST upload, POST run, GET results. Consider a collapsible detail row for each mismatch showing the full expected vs actual comparison.",
+      "dependsOn": ["P5-LV-004"]
+    }
+  ]
+}

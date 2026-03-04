@@ -2,6 +2,36 @@
 
 ---
 
+## Archived: 2026-03-03 | Git: de899d2
+
+### Session 8: 2026-03-03 — CPU throttling, GitHub repo, PDK guide, Phase 5 plan
+
+#### Done
+- **CPU throttling** (`1ef1730`) — Triple-layer: taskpolicy -b (macOS efficiency cores) + nice -n 10 + cpulimit -l 60%. Switched subprocess.run → Popen for PID access. Tested on 142MB ESD file.
+- **DRC timeout bumped** — 300s → 2700s (45 min) for throttled large file runs.
+- **E2E validated** — Full flow: upload 142MB SKY130 ESD → DRC (19 min throttled, tiled mode) → 11 violations found. All stages working.
+- **PDK authoring guide** — `docs/pdk-authoring.md`: schema reference, DRC deck template, validation steps, checklist.
+- **GitHub repo** — Created ogdeeeezy/drc, all commits pushed.
+- **Phase 5 plan** — `docs/plan-phase5.md`: auto-fix loop, PCell generator, LVS checker. 3 features, 13 stories.
+- **KLayout Python API research** — `pip install klayout` provides in-process DRC via Region API. 100-1000x faster than subprocess.
+
+#### Decisions
+- cpulimit alone ineffective on Apple Silicon — needs taskpolicy -b alongside it
+- DRC blocks API thread — async execution is prerequisite for Phase 5
+- Monte Carlo feasible via `klayout.db` Region.*_check() methods (no subprocess per sample)
+
+### Session 7: 2026-03-03 — KLayout integration, e2e tests, memory profiling, DRC flag fix
+
+#### Done
+- **KLayout CLI confirmed** — Already installed at macOS app bundle, `_find_klayout()` auto-detects.
+- **Latent DRC bug fixed** — SKY130 deck defaults all rule groups to disabled. Added `DEFAULT_DRC_FLAGS`.
+- **E2E integration tests** — 8 tests. All pass against real KLayout.
+- **Memory profiling tests** — 9 tests. ~64 bytes/poly scaling.
+- **Vendored SKY130 DRC deck** — now tracked.
+- **303 total tests** (286 unit + 17 integration), all passing.
+
+---
+
 ## Archived: 2026-03-02 | Git: 438df94
 
 ### Removed Section: Session 1

@@ -1,0 +1,93 @@
+# Ralph Progress Log
+Started: Tue Mar  3 15:14:50 MST 2026
+---
+
+## Codebase Patterns
+- Use gdstk.rectangle for all polygon construction — no boolean ops needed for basic shapes
+- SKY130 layer numbers defined in pdk.json; use constants (LYR_DIFF, LYR_POLY, etc.) in generators
+- PCellGenerator.snap_to_grid(value, 0.005) for all coordinates — SKY130 grid is 5nm
+- Use unified contact pitch (max of licon and mcon spacing) to avoid spacing violations
+- T-gate widening needed when gate L < 0.270um (licon + 2*enclosure)
+- Cell names: sky130_{device}_{params} with 'p' for decimal points
+- RPM layer (86/20): min width 1.27um, min spacing 0.84um — much larger than poly min width
+- poly_rs (66/13): marks resistive region on poly
+- Precision resistor = RPM & PSDM & poly.interacting(poly_rs) — all three layers needed
+- NPC (95/20) layer needed for poly-to-contact transitions
+- _place_terminal_contacts helper can be reused for any poly-based terminal connection
+- _via_array(x0, y0, x1, y1, size, spacing, margin) — reusable 2D via/contact array placer
+- CAPM layer (89/44) not in pdk.json — hardcoded in capacitor generator
+- Met3 enclosure of CAPM (0.14um) too narrow for via2 — must extend met3 with landing pad
+- API routes: register static paths (/devices) before dynamic paths (/{id}/download) to avoid FastAPI conflicts
+- DRCReport fields: description, original_file, generator, top_cell — NOT source_file or total_violations as constructor arg
+
+## 2026-03-03 15:27 - P5-PC-001
+- Implemented PCellGenerator base class (ABC) in backend/pcell/base.py
+- Implemented MOSFETGenerator in backend/pcell/mosfet.py with full SKY130 design rules
+- Supports NMOS/PMOS, multi-finger, gate contact positioning (top/bottom/both)
+- Full connection stack: diff → licon → li1 → mcon → met1 with pin labels (S/D/G/B)
+- T-gate poly widening for small L values, nwell for PMOS, implant layers
+- 44 tests (10 base + 34 MOSFET) all passing, 438 total tests, zero regressions
+- Files: backend/pcell/__init__.py, base.py, mosfet.py; tests/unit/test_pcell_base.py, test_pcell_mosfet.py
+- **Learnings for future iterations:**
+  - licon.11 rule (poly-to-licon-on-diff spacing = 0.055um) not in pdk.json — hardcoded in generator
+  - Implant enclosure (0.125um) also not in pdk.json — approximate value used
+  - gdstk.Library.write_gds() requires a file path, not None — use tmp_path for test validation
+  - ruff E741 flags single-letter `l` as ambiguous — use `gl` for gate length
+---
+
+## 2026-03-03 15:50 - P5-PC-002
+- Implemented PolyResistorGenerator in backend/pcell/resistor.py
+- Supports p+ poly resistor with serpentine/meander multi-segment layout
+- Full connection stack: poly → licon → li1 → mcon → met1 with PLUS/MINUS pin labels
+- RPM (86/20) + poly_rs (66/13) + PSDM (94/20) layers for precision resistor definition
+- NPC layer for poly-to-contact transitions
+- RPM minimum width enforcement (1.27um in both dimensions)
+- U-turn poly bridges for multi-segment serpentine routing
+- Optional head/tail contacts via parameters
+- 33 tests all passing, 518 total tests, zero regressions
+- Files: backend/pcell/resistor.py, backend/pcell/__init__.py, tests/unit/test_pcell_resistor.py
+- **Learnings for future iterations:**
+  - RPM min width (1.27um) is much larger than poly min width (0.15um) — must pad RPM to meet minimums
+  - Dead code from initial logic was flagged by ruff F841 — always compute poly extents in one place
+  - Contact regions need contact_to_rpm spacing (0.200um) to keep licons outside RPM boundary
+  - Serpentine pattern: even segments go bottom→top, odd segments go top→bottom (flipped)
+---
+
+## 2026-03-03 16:15 - P5-PC-003
+- Implemented MIMCapGenerator in backend/pcell/capacitor.py
+- SKY130 MIM cap: bottom plate = met3, top plate = CAPM (89/44)
+- Via3 array on CAPM connects up to met4 (TOP terminal)
+- Via2 array on extended met3 landing pad connects down to met2 (BOT terminal)
+- Met3 extends with dedicated landing pad below CAPM for via2 placement
+- Capacitance calculation: C = area * 2 fF/um^2, reported in metadata
+- Pin labels: TOP (met4), BOT (met2)
+- 27 tests all passing, 527 total tests, zero regressions
+- Files: backend/pcell/capacitor.py, backend/pcell/__init__.py, tests/unit/test_pcell_capacitor.py
+- **Learnings for future iterations:**
+  - Met3 enclosure of CAPM (0.14um) is too narrow for via2 (0.2um) + margins — must extend met3 with dedicated landing pad
+  - _via_array helper is reusable for any 2D contact/via array within a bounding box
+  - CAPM layer is (89/44) in SKY130 — not in pdk.json, hardcoded in generator
+  - MIM cap layout pattern: extend bottom plate on one side for contact landing area
+---
+
+## 2026-03-03 16:45 - P5-PC-004
+- Implemented PCell API endpoint with 3 routes: POST /api/pcell/generate, GET /api/pcell/devices, GET /api/pcell/{id}/download
+- POST /generate accepts JSON body with pdk, device_type, params; generates GDS and runs self-validation DRC
+- GET /devices returns supported devices per PDK with parameter schemas (for frontend dynamic forms)
+- GET /{id}/download returns generated GDS file for download
+- Generator registry maps (pdk, device_type) → generator instance for nmos, pmos, poly_resistor, mim_capacitor
+- DRC errors handled gracefully — returns GDS with drc_clean=false, violation_count=-1 instead of crashing
+- Metadata persisted as JSON alongside GDS in data/pcells/{id}/
+- PCELLS_DIR added to backend/config.py
+- Route registered in backend/main.py
+- 15 tests all passing, 593 total tests, zero regressions
+- Files: backend/api/routes/pcell.py, backend/config.py, backend/main.py, tests/unit/test_api_pcell.py
+- Also restored missing capacitor.py and resistor.py from previous commits (branch merge issue)
+- **Learnings for future iterations:**
+  - FastAPI route ordering matters: /devices must come before /{pcell_id}/download to avoid path conflict
+  - Use Pydantic BaseModel for JSON request bodies (not query params with dict type)
+  - DRCReport constructor takes description, original_file, generator, top_cell — not source_file or total_violations
+  - Violation model uses Violation class with geometries list, not ViolationCategory
+  - PCellGenerator.validate_params raises ValueError which maps to HTTPException(400)
+  - When cherry-picking across diverged branches, check all files exist on disk after resolve
+---

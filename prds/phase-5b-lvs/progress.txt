@@ -1,0 +1,97 @@
+# Ralph Progress Log
+Started: Tue Mar  3 15:14:49 MST 2026
+---
+
+## Codebase Patterns
+- LVS follows DRCRunner pattern: same __init__(binary, timeout), sync run(), async async_run()
+- CPU throttling uses triple-layer: taskpolicy -b (macOS) + nice + cpulimit
+- PDKConfig fields are optional via `| None` with `default=None` — no need to update existing pdk.json files
+- Test fixtures use tmp_path for PDK dirs + patch PDK_CONFIGS_DIR
+- The .lvsdb format is NOT XML — it's a custom S-expression-like text format starting with `#%lvsdb-klayout`
+- .lvsdb has three sections: layout(...), reference(...), xref(...) with match/nomatch/mismatch statuses
+- Short-form keywords exist (J=layout, H=reference, Z=xref, X=circuit/nomatch, D=device, N=net) — parser handles both
+
+---
+
+## 2026-03-03 - P5-LV-001
+- Implemented LVSRunner class in backend/core/lvs_runner.py mirroring DRCRunner architecture
+- Created LVS data models (LVSResult, LVSError, LVSReport, LVSMismatch) in backend/core/lvs_models.py
+- Added klayout_lvs_deck optional field to PDKConfig schema
+- build_command() constructs: klayout -b -r <deck.lvs> -rd input=<gds> -rd schematic=<spice> -rd report=<lvsdb>
+- Both sync run() and async async_run() with CPU throttling and timeout enforcement
+- 29 tests all passing, 412 total tests (0 regressions)
+- **Learnings for future iterations:**
+  - LVSRunner.get_lvs_deck_path() checks for klayout_lvs_deck attribute existence via hasattr since it's optional
+  - The match field in LVSResult is a placeholder (True) — the parser (P5-LV-002) will determine actual match from report
+  - Existing pdk.json files don't need updating since klayout_lvs_deck defaults to None
+---
+
+## 2026-03-03 - P5-LV-002
+- Implemented LVSReportParser class in backend/core/lvs_parser.py
+- Created LVSParseError exception class for malformed input handling
+- Built tokenizer for KLayout's custom .lvsdb text format (not XML as PRD assumed)
+- Parser extracts layout/reference circuit info (devices, nets, params) for name lookups
+- Cross-reference (xref) section parsed for match/nomatch/mismatch status per device/net/pin
+- Supports both long-form (layout, xref, match) and short-form (J, Z, 1) keywords
+- Created test fixtures: clean_inverter.lvsdb (all match) and mismatched_inverter.lvsdb (extra/missing devices + net)
+- 29 new tests, 485 total tests (0 regressions)
+- **Learnings for future iterations:**
+  - The .lvsdb format is NOT XML — it's S-expression-like text with `#%lvsdb-klayout` header
+  - Device/net IDs in xref map to numbered instances inside circuit() blocks, not the device abstracts at top level
+  - `()` in xref means "no match on this side" — e.g., `device(3 () nomatch)` = extra device in layout
+  - Short key 'X' is overloaded: 'circuit' keyword when before '(', 'nomatch' status otherwise
+  - The `_find_block` / `_iter_blocks` pattern makes section extraction clean without full recursive descent
+---
+
+## 2026-03-03 - P5-LV-003
+- SKY130 LVS deck at backend/pdk/configs/sky130/sky130A.lvs with full device extraction and connectivity
+- Extracts NMOS (mos4), PMOS (mos4), and poly resistors (resistor) with correct SKY130 layer numbers
+- Derived layers: nsd (diff & nsdm), psd (diff & psdm), gate_poly (poly - poly_res), pwell (nwell.inverted)
+- Full connectivity stack: licon→li1→mcon→met1→via1→met2→via2→met3→via3→met4→via4→met5
+- Well/substrate body connections: nwell→ntap, pwell→ptap
+- Net label layers (li1_lbl through met5_lbl) for net naming
+- pdk.json updated with klayout_lvs_deck: "sky130A.lvs"
+- SPICE fixtures: inverter.spice (clean) and inverter_with_resistor.spice (for mismatch testing)
+- 33 new tests in test_lvs_deck.py, 593 total tests (0 regressions)
+- **Learnings for future iterations:**
+  - KLayout LVS deck uses `extract_devices()` with device model + terminal hash map (e.g., "SD" => nsd, "G" => gate_poly)
+  - mos4 model requires 4 terminals: SD (source/drain), G (gate), W (well/body), tS (same as SD for symmetric devices)
+  - Poly resistors need separate gate_poly (poly - poly_res) to prevent resistor poly from being treated as gates
+  - `netlist.simplify` before `compare` is important — combines parallel devices and removes floating nets
+  - Integration tests requiring KLayout are skipped via `_has_klayout()` check — CI-friendly
+---
+
+## 2026-03-03 - P5-LV-004
+- Implemented LVS API endpoints in backend/api/routes/lvs.py with three routes
+- POST /api/jobs/{job_id}/lvs/upload — accepts SPICE netlist (.spice, .sp, .cir, .net, .cdl)
+- POST /api/jobs/{job_id}/lvs/run — triggers async LVS (returns immediately like DRC)
+- GET /api/jobs/{job_id}/lvs/results — returns parsed LVS report with match, counts, mismatches
+- Added LVS statuses to JobStatus enum: running_lvs, lvs_complete, lvs_failed
+- Added netlist_path and lvs_report_path columns to jobs DB schema and Job dataclass
+- Background task runs LVSRunner async, parses report, updates job status
+- 20 new tests, 613 total tests (0 regressions)
+- **Learnings for future iterations:**
+  - Follow DRC route pattern exactly: async background task via asyncio.create_task, immediate 200 response
+  - Job.from_dict() already handles unknown fields gracefully via `valid = {k: v for k, v in data.items() if k in cls.__dataclass_fields__}`
+  - SQLite schema changes need both _SCHEMA and JOB_COLUMNS updated in database.py
+  - TestClient with FastAPI runs background tasks in-process, so time.sleep(0.2) is enough to catch async completion
+---
+
+## 2026-03-03 - P5-LV-005
+- Implemented LVS Mismatch Viewer frontend component in frontend/src/components/LVS/MismatchList.tsx
+- Added LVS types (LVSMismatch, LVSResultsResponse) and API methods (uploadNetlist, runLVS, getLVSResults) to api/client.ts
+- Updated App.tsx with new "lvs" stage, netlist upload/run LVS controls, and right sidebar mismatch display
+- Match/nomatch banner with green check or red X, summary stats grid (devices/nets matched/mismatched)
+- Sortable mismatch list with color-coded type badges (missing_device=red, extra_device=orange, net_mismatch=yellow, pin_mismatch=blue, parameter_mismatch=grey)
+- Collapsible detail rows showing full expected vs actual comparison
+- Netlist upload form (.spice/.sp/.cir/.net/.cdl) integrated into DRC stage header with separator
+- Run LVS button appears after netlist uploaded, shows spinner during async poll
+- Async polling pattern: POST /lvs/run then poll GET /jobs/{id} every 2s for lvs_complete/lvs_failed
+- Frontend builds clean (tsc + vite build), 613 backend tests pass (0 regressions)
+- **Learnings for future iterations:**
+  - App.tsx uses a Stage union type — new stages extend via `type Stage = "upload" | ... | "lvs"`
+  - All styling is inline objects, no CSS modules/Tailwind — follow the dark theme colors exactly
+  - ViolationList is the pattern template for any sortable right-sidebar list component
+  - LVS polling uses a separate `lvsRunning` flag instead of the global `loading` to avoid blocking other UI
+  - The `netlistRef.current?.files?.length` check in disabled prop evaluates at render time, works for file inputs
+---

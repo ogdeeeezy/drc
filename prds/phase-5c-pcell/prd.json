@@ -1,0 +1,129 @@
+{
+  "id": "phase-5c-pcell",
+  "title": "Phase 5c: Parameterized Cell (PCell) Generator",
+  "description": "Generate DRC-clean GDS cells from component specifications. Users provide device type and parameters (e.g., NMOS W=1um L=0.15um fingers=4) and get a GDS cell that passes DRC. Each generated cell is self-validated by running it through the existing DRC pipeline. Supports MOSFET, poly resistor, and MIM capacitor for SKY130.",
+  "version": "1.0.0",
+  "status": "draft",
+  "created": "2026-03-03",
+  "updated": "2026-03-03",
+  "branchName": "ralph/phase-5c-pcell",
+  "parent_prd": "docs/plan-phase5.md",
+  "phase": "5c",
+  "depends_on": [],
+  "tech_stack": {
+    "language": "python 3.12+",
+    "framework": "FastAPI + uvicorn",
+    "geometry": "gdstk (GDS construction)",
+    "drc_validation": "KLayout subprocess (existing DRCRunner)",
+    "existing_reuse": [
+      "DRCRunner (backend/core/drc_runner.py) — self-validation",
+      "PDKConfig / pdk.json (backend/pdk/schema.py) — design rules",
+      "export_fixed_gds pattern (backend/export/gdsii.py) — GDS export",
+      "JobManager (backend/jobs/manager.py) — optional job tracking"
+    ]
+  },
+  "success_criteria": [
+    "User can generate a DRC-clean NMOS/PMOS cell with custom W, L, and finger count",
+    "User can generate a DRC-clean poly resistor with custom W, L, and segments",
+    "User can generate a DRC-clean MIM capacitor with custom W and L",
+    "Every generated cell is automatically DRC-checked — response includes drc_clean boolean and violation count",
+    "Generated GDS files are downloadable via API",
+    "All existing 303+ tests still pass, no regressions"
+  ],
+  "not_in_scope": [
+    "PCell for PDKs other than SKY130 (future: GF180, ASAP7)",
+    "Layout-level optimization (placement, routing)",
+    "Schematic-driven PCell generation (netlist → layout)",
+    "Guard ring generation",
+    "Hierarchical cell composition (placing multiple PCells together)"
+  ],
+  "userStories": [
+    {
+      "id": "P5-PC-001",
+      "title": "PCell Framework + MOSFET Generator (SKY130)",
+      "description": "As a layout engineer, I want to generate a DRC-clean MOSFET cell by specifying device type (nmos/pmos), W, L, and finger count. The generator encodes SKY130 design rules: poly pitch, diffusion extensions, contact placement, gate contact position (top/bottom/both), and metal1 routing to source/drain/gate pins. Output is a GDS cell built with gdstk.",
+      "acceptanceCriteria": [
+        "PCellGenerator base class in backend/pcell/base.py with generate(params) → gdstk.Cell interface",
+        "MOSFETGenerator subclass in backend/pcell/mosfet.py implementing SKY130 MOSFET layout",
+        "Supports params: device_type (nmos|pmos), w_um (float), l_um (float), fingers (int, default 1), gate_contact (top|bottom|both, default both)",
+        "Generated cell includes: diffusion, poly gates, source/drain contacts, gate contacts, metal1 routing, nwell (for pmos), implant layers",
+        "SKY130 design rules encoded: min poly-to-poly spacing, min diffusion extension beyond poly, contact size/spacing, metal1 width/spacing",
+        "Multi-finger layout: shared source/drain diffusion between adjacent fingers, interdigitated pattern",
+        "Pin labels on metal1: 'S' (source), 'D' (drain), 'G' (gate), 'B' (body/substrate)",
+        "Parameter validation: W >= min_width (SKY130: 0.15um), L >= min_length (SKY130: 0.15um), fingers >= 1",
+        "Test: generate 1-finger NMOS → verify layer count, polygon count, cell name format",
+        "Test: generate 4-finger PMOS → verify nwell present, correct finger count in layout"
+      ],
+      "priority": "P0",
+      "estimate": "XL",
+      "passes": true,
+      "notes": "This is the most complex story — requires detailed SKY130 layer knowledge. Reference docs/pdk-authoring.md for layer numbers. Key SKY130 layers: diffusion (65/20), poly (66/20), nwell (64/20), contact (66/44), metal1 (68/20), via1 (68/44), licon (66/44), nsdm (93/44), psdm (94/20). Use gdstk.Cell, gdstk.rectangle, gdstk.boolean for geometry construction. The generator should be deterministic (same params → same GDS).",
+      "dependsOn": []
+    },
+    {
+      "id": "P5-PC-002",
+      "title": "Poly Resistor Generator (SKY130)",
+      "description": "As a layout engineer, I want to generate a DRC-clean poly resistor cell by specifying W, L, number of segments, and whether to include head/tail contacts. The generator encodes SKY130 rules for poly resistor: resistor ID layer, minimum poly width for resistors, contact-to-resistor spacing, and metal routing to head/tail terminals.",
+      "acceptanceCriteria": [
+        "PolyResistorGenerator class in backend/pcell/resistor.py extending PCellGenerator",
+        "Supports params: w_um (float), l_um (float), segments (int, default 1), head_contact (bool, default true), tail_contact (bool, default true)",
+        "Generated cell includes: poly body, resistor ID marker layer (RPM or similar), head/tail contact arrays, metal1 routing",
+        "Multi-segment layout: serpentine/meander pattern with U-turns connecting segments",
+        "SKY130 resistor rules encoded: min poly width for res, res marker layer placement, contact spacing from resistor body",
+        "Pin labels: 'PLUS' (head), 'MINUS' (tail)",
+        "Parameter validation: W >= min poly res width, L >= minimum length, segments >= 1",
+        "Test: generate 1-segment resistor → verify layers and pin labels",
+        "Test: generate 3-segment serpentine → verify U-turns connect segments, total resistance length = 3 * L"
+      ],
+      "priority": "P1",
+      "estimate": "L",
+      "passes": true,
+      "notes": "SKY130 has multiple resistor types (p+ poly, n+ poly, high-res). Start with p+ poly (most common). The RPM (Resistor Poly Marker) layer identifies the resistive region. Reference SKY130 PDK docs for exact layer numbers and design rules for resistors.",
+      "dependsOn": ["P5-PC-001"]
+    },
+    {
+      "id": "P5-PC-003",
+      "title": "MIM Capacitor Generator (SKY130)",
+      "description": "As a layout engineer, I want to generate a DRC-clean MIM (Metal-Insulator-Metal) capacitor cell by specifying W and L (area determines capacitance). The generator encodes SKY130 MIM cap rules: which metal layers form the plates, minimum overlap, via arrays for connection, and enclosure rules.",
+      "acceptanceCriteria": [
+        "MIMCapGenerator class in backend/pcell/capacitor.py extending PCellGenerator",
+        "Supports params: w_um (float), l_um (float)",
+        "Generated cell includes: bottom plate (metal layer), top plate (cap metal layer), via arrays connecting to routing metals, enclosure metal on both plates",
+        "SKY130 MIM rules encoded: min plate dimensions, plate-to-plate overlap, via array spacing, metal enclosure of via",
+        "Pin labels: 'TOP' and 'BOT' on respective routing metals",
+        "Calculated capacitance reported in output metadata (C = area * cap_per_um2)",
+        "Parameter validation: W and L >= min MIM dimensions per SKY130 rules",
+        "Test: generate MIM cap → verify both plates present, via arrays connecting them",
+        "Test: verify calculated capacitance matches expected value for given area"
+      ],
+      "priority": "P1",
+      "estimate": "M",
+      "passes": true,
+      "notes": "SKY130 MIM cap uses metal3/metal4 or metal4/metal5 (check PDK docs). The CAPM layer marks the capacitor region. Simpler geometry than MOSFET — basically two overlapping rectangles with via arrays. capacitance density for SKY130 MIM is approximately 2 fF/um^2.",
+      "dependsOn": ["P5-PC-001"]
+    },
+    {
+      "id": "P5-PC-004",
+      "title": "PCell API Endpoint + Self-Validation",
+      "description": "As a user, I want a POST /api/pcell/generate endpoint that accepts device type and parameters, generates the GDS cell, automatically runs DRC on it, and returns the GDS download URL along with DRC results. If the generated cell has violations, the response indicates it's not DRC-clean (this should be rare if generators are correct, but provides a safety net).",
+      "acceptanceCriteria": [
+        "POST /api/pcell/generate accepts {pdk: str, device_type: str, params: dict}",
+        "device_type values: 'nmos', 'pmos', 'poly_resistor', 'mim_capacitor'",
+        "Generated GDS is saved to a pcell output directory with unique ID",
+        "DRC automatically run on generated GDS using existing DRCRunner (async)",
+        "Response includes: pcell_id, gds_url, drc_clean (bool), violation_count, violations (list if any), params echo, metadata (e.g., calculated capacitance for MIM)",
+        "GET /api/pcell/{pcell_id}/download returns the GDS file for download",
+        "GET /api/pcell/devices returns list of supported devices per PDK with parameter schemas",
+        "Invalid params return 400 with specific validation error (e.g., 'W must be >= 0.15um for SKY130')",
+        "Unsupported device_type returns 400 with list of supported types",
+        "Test: generate NMOS via API → response has drc_clean=true, download URL works",
+        "Test: invalid params (L=0.01um) → 400 with validation error"
+      ],
+      "priority": "P0",
+      "estimate": "M",
+      "passes": true,
+      "notes": "New route file: backend/api/routes/pcell.py. Register in main.py. The self-validation DRC uses a lightweight approach: generate GDS → run DRC → report. Don't create a full job for PCell validation — use DRCRunner.run() directly. Store generated PCells in a pcells/ directory under the data root. The /devices endpoint helps frontend build dynamic parameter forms.",
+      "dependsOn": ["P5-PC-001", "P5-PC-002", "P5-PC-003"]
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+# Ralph Progress Log
+Started: Tue Mar  3 14:27:13 MST 2026
+---
+
+## Codebase Patterns
+- DRCRunner has both sync `run()` and async `async_run()` methods — tests can use either
+- API tests use `TestClient(app)` with patched `cfg.JOBS_DIR` and `cfg.UPLOAD_DIR` for isolation
+- The DRC route now returns immediately; background task updates job status via `manager.update_status()`
+- Mock async subprocess with `AsyncMock` from `unittest.mock`, but use `MagicMock` for `proc.kill()` (non-coroutine)
+- `pytest-asyncio` with `asyncio_mode = "auto"` — no need for `@pytest.mark.asyncio` decorator
+- AutoFixRunner is a standalone service class (backend/fix/autofix.py) — separate from route handlers
+- When testing auto-fix loop, patch `_apply_deltas_from_suggestions` since LayoutManager is mocked
+- `_is_auto_applicable()` and `_flag_reason()` are module-level functions, easy to unit test directly
+- Database creates both `jobs` and `fix_provenance` tables in `__init__` — no separate migration needed
+- `_write_provenance()` in autofix.py writes one row per PolygonDelta (not per suggestion)
+- JSON-serialized points come back as lists-of-lists, not lists-of-tuples — test accordingly
+- `JobManager` exposes `insert_provenance()`, `get_provenance()`, `update_provenance_action()` delegating to Database
+- `_detect_oscillation()` and `_extract_category_counts()` are pure module-level functions — unit test directly
+- Category history is seeded from the initial report (iteration 0), then updated after each DRC re-run
+
+---
+
+## 2026-03-03 - P5-ASYNC-001
+- Implemented async DRC execution via `asyncio.create_subprocess_exec`
+- Added `DRCRunner.async_run()` method — mirrors sync `run()` but non-blocking
+- Updated POST /api/jobs/{id}/drc to launch DRC as `asyncio.create_task` and return immediately
+- Updated apply-and-recheck endpoint to use `await runner.async_run()` internally
+- CPU throttling (taskpolicy, nice, cpulimit) preserved in async path
+- Timeout enforced via `asyncio.wait_for`
+- Files changed: `backend/core/drc_runner.py`, `backend/api/routes/drc.py`, `backend/api/routes/fix.py`, `tests/unit/test_drc_runner.py`, `tests/unit/test_api_routes.py`, `tests/unit/test_async_drc.py`, `tests/integration/test_e2e_drc.py`
+- **Learnings for future iterations:**
+  - `asyncio.create_subprocess_exec` returns bytes, not str — decode with `.decode()` after `communicate()`
+  - Background `asyncio.create_task` in FastAPI works well; the task runs after response is sent
+  - `proc.kill()` in asyncio subprocess is NOT a coroutine — don't use `AsyncMock` for it
+  - When testing async endpoints with `TestClient`, background tasks may need `time.sleep()` to complete
+  - Keep sync `run()` method for backward compat — existing sync tests still use `subprocess.Popen` mocks
+---
+
+## 2026-03-03 - P5-AF-001
+- Created `AutoFixRunner` service class in `backend/fix/autofix.py`
+- Implements loop: suggest → filter by confidence → apply high-confidence fixes → re-DRC → repeat
+- Confidence filtering: high=auto-apply, medium=auto-apply only if threshold='medium', low=always flag
+- Also flags: removals, multi-layer fixes, fixes that create new violations
+- Stop conditions: drc_clean, stall (all flagged), regression (violations increased), max_iterations, no_suggestions, drc_error
+- Added `POST /api/jobs/{job_id}/fix/auto` endpoint with `confidence_threshold` and `max_iterations` params
+- Response includes: iterations_run, final_violation_count, fixes_applied_count, fixes_flagged_count, stop_reason, iteration_history
+- Files changed: `backend/fix/autofix.py` (new), `backend/api/routes/fix.py`, `tests/unit/test_autofix.py` (new)
+- 25 new tests (324 total, all passing)
+- **Learnings for future iterations:**
+  - Extract service logic into standalone classes (AutoFixRunner), keep route handlers thin
+  - When mocking LayoutManager, also patch `_apply_deltas_from_suggestions` — the mocked layout has no real polygons
+  - `_is_auto_applicable()` is the key filtering function — tests should cover all confidence × flag combinations
+  - `FixSuggestion.affected_layers` returns a set of tuples — multi-layer means len > 1
+---
+
+## 2026-03-03 - P5-AF-002
+- Added `fix_provenance` SQLite table for audit trail (schema in `backend/jobs/database.py`)
+- Table columns: id, job_id, iteration, rule_id, violation_category, rule_type, confidence, action, flag_reason, before_points (JSON), after_points (JSON), cell_name, gds_layer, gds_datatype, created_at
+- Added `insert_provenance()`, `get_provenance()`, `update_provenance_action()` to Database and JobManager
+- Wired provenance into AutoFixRunner: writes records for both auto-applied and flagged fixes
+- Wired provenance into manual apply-and-recheck endpoint
+- Added `GET /api/jobs/{job_id}/fix/provenance?iteration=N` endpoint with iteration filtering
+- Files changed: `backend/jobs/database.py`, `backend/jobs/manager.py`, `backend/fix/autofix.py`, `backend/api/routes/fix.py`, `tests/unit/test_database.py`, `tests/unit/test_autofix.py`
+- 31 new tests (355 total, all passing)
+- **Learnings for future iterations:**
+  - JSON serialization converts tuples to lists — test assertions should use `[[x,y]]` not `[(x,y)]`
+  - `_write_provenance()` writes one row per delta, not per suggestion — important for multi-delta fixes
+  - Provenance table uses FOREIGN KEY on job_id but no CASCADE — records persist if job deleted
+  - `get_provenance()` supports both iteration and action filters, composable via query params
+---
+
+## 2026-03-03 - P5-AF-003
+- Added oscillation detection: tracks per-category violation counts across iterations
+- `_detect_oscillation()` checks for N>0 → 0 → M>0 pattern in category history
+- `_extract_category_counts()` extracts per-category counts from DRC reports
+- `AutoFixResult` now includes `oscillating_categories: list[str]` field
+- Category history seeded from initial report (iteration 0), updated after each DRC re-run
+- Oscillation check runs after regression check — stops loop with `stop_reason='oscillation'`
+- API response for `/fix/auto` now includes `oscillating_categories` field
+- Files changed: `backend/fix/autofix.py`, `backend/api/routes/fix.py`, `tests/unit/test_autofix.py`
+- 11 new tests (366 total, all passing)
+- **Learnings for future iterations:**
+  - Oscillation needs 3+ data points (initial + 2 iterations minimum) — seed history from initial report
+  - `_detect_oscillation` is a pure function on `dict[str, list[int]]` — easy to unit test directly
+  - Multi-iteration mock tests need `side_effect` with a counter to return different DRC results per call
+  - Category history must track ALL categories seen across ALL iterations (use `all_categories` set)
+  - New categories appearing in later iterations get zero-padded history: `[0] * iteration_num`
+---
+
+## 2026-03-03 - P5-AF-004
+- Added flagged fixes review endpoints for human-in-the-loop workflow
+- `GET /api/jobs/{job_id}/fix/flagged` returns flagged provenance records grouped by iteration
+- `POST /api/jobs/{job_id}/fix/flagged/approve` applies approved fixes to GDS, re-runs DRC, updates provenance to 'human_approved'
+- `POST /api/jobs/{job_id}/fix/flagged/reject` marks rejected fixes as 'rejected' in provenance
+- Added `get_provenance_by_ids()` to Database and JobManager for ID-based lookups
+- Validation ensures records must be flagged and belong to the correct job
+- Files changed: `backend/api/routes/fix.py`, `backend/jobs/database.py`, `backend/jobs/manager.py`, `tests/unit/test_flagged_fixes.py` (new)
+- 17 new tests (383 total, all passing)
+- **Learnings for future iterations:**
+  - Approve endpoint reconstructs deltas from provenance records (before/after points) rather than from FixEngine cache
+  - Points stored in JSON come back as lists-of-lists, need `tuple(p)` conversion for `_points_match`
+  - Flagged endpoint groups by iteration for cleaner presentation — use `dict[int, list]` then sort
+  - Validation is two-stage: first check IDs exist, then check they're flagged and belong to the right job
+  - `patch.object(deps, "_job_manager", mgr)` is the cleanest way to inject a test manager into route handlers
+---

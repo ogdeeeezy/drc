@@ -1,57 +1,50 @@
 # HANDOFF — agentic-drc
 
 ## What This Is
-Open-source DRC (Design Rule Check) tool — PVS alternative for semiconductor layout verification. Deterministic rules-based expert system that checks GDSII layouts against PDK design rules, triages violations, and suggests geometric fixes.
+Open-source DRC tool — PVS alternative for semiconductor layout verification. Checks GDSII layouts against PDK design rules, triages violations, suggests geometric fixes, auto-applies high-confidence fixes, runs LVS, and generates DRC-clean parameterized cells.
 
 ## Current State
-- **Phases 1-4**: ALL COMPLETE (19/19 stories)
-- **Adaptive DRC**: COMPLETE — auto-selects threads/mode by GDS file size
-- **CPU throttling**: COMPLETE — triple-layer (taskpolicy -b + nice + cpulimit at 60%)
-- **KLayout integration**: WORKING — macOS app bundle auto-detected
-- **286 unit tests + 17 integration**, all passing
-- **Frontend builds clean** (`cd frontend && npm run build`)
-- **E2E validated**: 142MB SKY130 ESD file → 11 violations found in 19 min (throttled)
-- **GitHub**: https://github.com/ogdeeeezy/drc
+- **Phases 1-5**: ALL COMPLETE (33/33 stories)
+- **613 tests passing** (unit + integration), frontend builds clean
+- **GitHub**: https://github.com/ogdeeeezy/drc — all pushed to main
 
 ## How to Run
 - Backend: `make run` (uvicorn on port 8000)
 - Frontend: `make frontend` (Vite dev on 5173, proxies /api)
-- Unit tests: `make test` | All tests: `make test-all`
+- Tests: `make test` (unit) | `make test-all` (all)
 - Docker: `docker compose up --build`
 
 ## Key Architecture
-- **KLayout subprocess** for DRC — default flags enable feol/beol/offgrid/floating_met
-- **CPU throttling**: taskpolicy -b (macOS efficiency cores) + nice -n 10 + cpulimit -l 60%
-- **Adaptive DRC**: <20MB=4t deep, 20-80MB=2t deep, >80MB=1t tiled(1000µm)
-- **Timeout**: 2700s (45 min) — headroom for large files at throttled CPU
-- **gdstk** for GDSII I/O, **pdk.json** for PDK-agnostic config
-- **Fix priority**: shorts > off-grid > width > spacing > enclosure > area > density
-- **SQLite WAL** for job persistence, versioned GDS export
+- **Async DRC** — `asyncio.create_subprocess_exec`, non-blocking uvicorn
+- **Auto-fix loop** — `POST /api/jobs/{id}/fix/auto` with confidence filtering, provenance log, oscillation detection
+- **LVS** — KLayout LVS subprocess, .lvsdb S-expression parser, SKY130 device extraction
+- **PCell** — MOSFET/resistor/capacitor generators via gdstk, self-validated with DRC
+- **CPU throttling** — taskpolicy -b + nice + cpulimit at 60%
+- **SQLite WAL** — jobs + fix_provenance tables
 
 ## Hot Files
-- `backend/core/drc_runner.py` — DRC runner, adaptive_strategy(), CPU throttling, DEFAULT_DRC_FLAGS
-- `backend/config.py` — DRCStrategy, thresholds, _find_klayout(), DRC_CPU_LIMIT_PERCENT
-- `backend/pdk/configs/sky130/sky130A_mr.drc` — SKY130 DRC deck (vendored, tracked)
-- `docs/plan-phase5.md` — Phase 5 plan (auto-fix, PCell, LVS)
-- `docs/pdk-authoring.md` — PDK authoring guide
+- `backend/core/drc_runner.py` — DRC runner (sync + async), adaptive_strategy(), CPU throttling
+- `backend/core/lvs_runner.py` — LVS runner, same subprocess pattern as DRC
+- `backend/core/lvs_parser.py` — .lvsdb S-expression parser
+- `backend/fix/autofix.py` — AutoFixRunner, confidence tiers, oscillation detection
+- `backend/pcell/mosfet.py` — MOSFET generator (most complex PCell)
+- `backend/jobs/database.py` — SQLite schema: jobs + fix_provenance tables
+- `prds/` — Phase 5 modular PRDs (completed, for reference)
 
 ## Gotchas
-- SKY130 DRC deck defaults ALL rule groups to disabled — `DEFAULT_DRC_FLAGS` in drc_runner.py fixes this
-- KLayout macOS app bundle needs Gatekeeper bypass: `sudo xattr -r -d com.apple.quarantine /Applications/KLayout/klayout.app`
-- DRC runs synchronously — blocks the uvicorn worker thread (async is Phase 5 prerequisite)
-- `cpulimit` must be installed separately: `brew install cpulimit` (auto-detected at runtime)
-- cpulimit alone doesn't work well on Apple Silicon — needs taskpolicy -b alongside it
+- SKY130 DRC deck defaults ALL rule groups to disabled — `DEFAULT_DRC_FLAGS` fixes this
+- KLayout macOS needs Gatekeeper bypass: `sudo xattr -r -d com.apple.quarantine /Applications/KLayout/klayout.app`
+- `cpulimit` needs `brew install cpulimit` — auto-detected at runtime
+- cpulimit alone doesn't work on Apple Silicon — needs taskpolicy -b alongside
+- .lvsdb format is NOT XML — it's S-expression text (custom parser in lvs_parser.py)
+- 4 pre-existing lint errors in drc_runner.py (E402 import order + E501 line length) — not from Phase 5
 
-## What's Next (Phase 5)
-Read `docs/plan-phase5.md` for full plan. Execution order:
-1. **Async DRC** (prerequisite, 1-2 days) — unblock API thread during DRC runs
-2. **Auto-fix loop** (3-5 days) — automated fix-apply-recheck with human audit trail
-3. **LVS checker** (2-3 weeks) — layout vs schematic verification
-4. **PCell generator** (2-3 weeks) — auto-generate DRC-clean GDS from component specs
+## What's Next
+1. **Manual E2E validation** — test auto-fix loop, LVS, PCell on real SKY130 layouts
+2. **More PDKs** — GF180, ASAP7 (DRC decks, LVS decks, PCell generators)
+3. **Monte Carlo optimization** — klayout.db in-process for 10k+ geometric variants
+4. **LLM-assisted DRC deck generator** — auto-generate rules from DRM tables
+5. **CI/CD** — GitHub Actions for test + lint on PR
 
 ## Key Research Finding
-`pip install klayout` provides in-process DRC via `klayout.db` Region API — 100-1000x faster than subprocess. This enables Monte Carlo layout optimization (future build) without needing a custom geometry engine. See Session 8 notes in PROGRESS.
-
-## Future Builds
-- **LLM-assisted DRC deck generator** — feed DRM tables + KLayout API docs to auto-generate rules
-- **Monte Carlo layout optimization** — 10k+ geometric variants via klayout.db in-process, scored by parasitics, validated with SPICE
+`pip install klayout` provides in-process DRC via `klayout.db` Region API — 100-1000x faster than subprocess. Enables Monte Carlo without custom geometry engine.

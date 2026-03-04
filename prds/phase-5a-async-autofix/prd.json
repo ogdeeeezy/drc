@@ -1,0 +1,152 @@
+{
+  "id": "phase-5a-async-autofix",
+  "title": "Phase 5a: Async DRC + Auto-Fix Loop",
+  "description": "Convert DRC execution from synchronous (blocks uvicorn worker) to async background tasks, then build a fully automated fix-apply-recheck loop with confidence filtering, provenance logging, oscillation detection, and human audit trail. This transforms agentic-drc from a manual fix-review tool into an autonomous layout co-pilot.",
+  "version": "1.0.0",
+  "status": "draft",
+  "created": "2026-03-03",
+  "updated": "2026-03-03",
+  "branchName": "ralph/phase-5a-async-autofix",
+  "parent_prd": "docs/plan-phase5.md",
+  "phase": "5a",
+  "depends_on": [],
+  "tech_stack": {
+    "language": "python 3.12+",
+    "framework": "FastAPI + uvicorn",
+    "database": "SQLite WAL",
+    "drc_engine": "KLayout subprocess (batch mode)",
+    "geometry": "gdstk",
+    "existing_reuse": [
+      "DRCRunner (backend/core/drc_runner.py)",
+      "FixEngine (backend/fix/engine.py)",
+      "FixSuggestion / FixConfidence (backend/fix/fix_models.py)",
+      "Database (backend/jobs/database.py)",
+      "JobManager (backend/jobs/manager.py)",
+      "fix routes: suggest, apply, apply-and-recheck (backend/api/routes/fix.py)",
+      "drc routes: run_drc (backend/api/routes/drc.py)"
+    ]
+  },
+  "success_criteria": [
+    "DRC runs no longer block the uvicorn worker thread — uploads and other API calls work during DRC",
+    "Auto-fix endpoint loops until DRC-clean or stalled, respecting confidence thresholds",
+    "Every fix (auto-applied or flagged) has a provenance record in SQLite with before/after coordinates",
+    "Oscillating violations (same category re-appearing after fix) are detected and auto-stopped",
+    "Flagged fixes are queryable via API for human review",
+    "All existing 303 tests still pass, no regressions"
+  ],
+  "not_in_scope": [
+    "LLM-assisted fix suggestions (future)",
+    "Monte Carlo optimization (future, depends on in-process klayout.db)",
+    "Frontend UI for auto-fix (this is API-only)",
+    "PCell generation or LVS (separate PRDs)"
+  ],
+  "userStories": [
+    {
+      "id": "P5-ASYNC-001",
+      "title": "Async DRC Execution",
+      "description": "As a user, I want DRC to run in the background so that the API remains responsive during long DRC runs (19+ minutes for large files). Currently DRCRunner.run() blocks the uvicorn worker thread via subprocess.Popen + communicate(). Convert to asyncio.create_subprocess_exec so the event loop is freed. Return job_id immediately with status 'running_drc', poll via existing GET /api/jobs/{id} for completion.",
+      "acceptanceCriteria": [
+        "POST /api/jobs/{job_id}/drc returns immediately with {status: 'running_drc', job_id: ...}",
+        "DRC subprocess runs via asyncio.create_subprocess_exec (not blocking subprocess.Popen)",
+        "CPU throttling (taskpolicy -b + nice + cpulimit) still works with async subprocess",
+        "GET /api/jobs/{job_id} returns current status: running_drc → drc_complete or drc_failed",
+        "Timeout (2700s) still enforced — process killed on timeout, status set to drc_failed",
+        "Multiple DRC jobs can run concurrently without blocking each other",
+        "Existing POST /api/jobs/{job_id}/fix/apply-and-recheck still works (uses async DRC internally)",
+        "All existing DRC-related tests pass (update mocks from subprocess.Popen to async equivalent)",
+        "Integration test: start DRC → immediately hit /health → get 200 (proves non-blocking)"
+      ],
+      "priority": "P0",
+      "estimate": "L",
+      "passes": true,
+      "notes": "Key files: backend/core/drc_runner.py (add async_run method), backend/api/routes/drc.py (use background task or await). Keep sync run() for backwards compat in tests. Consider FastAPI BackgroundTasks or asyncio.create_task. cpulimit attachment needs the PID from async subprocess — use process.pid.",
+      "dependsOn": []
+    },
+    {
+      "id": "P5-AF-001",
+      "title": "Auto-Fix Endpoint with Iteration Loop and Confidence Filtering",
+      "description": "As a user, I want to POST /api/jobs/{job_id}/fix/auto with a confidence_threshold and max_iterations, and have the system automatically loop: suggest fixes → filter by confidence → apply high-confidence single-layer non-destructive fixes → re-DRC → repeat until clean or stalled. The existing suggest/apply/recheck endpoints are manual (user picks indices). This automates the selection based on confidence tiers: High + single-layer + no new violations = auto-apply. Medium or multi-layer = flag for review. Low or deletion = always flag, never auto-apply.",
+      "acceptanceCriteria": [
+        "POST /api/jobs/{job_id}/fix/auto accepts {confidence_threshold: 'high'|'medium', max_iterations: int}",
+        "Loop runs: suggest_fixes → filter by confidence tier → apply qualifying fixes → re-DRC → repeat",
+        "High-confidence + single-layer + creates_new_violations=false fixes are auto-applied",
+        "Medium-confidence or multi-layer fixes are flagged, skipped in auto mode",
+        "Low-confidence or is_removal=true fixes are always flagged, never auto-applied",
+        "Loop stops when: DRC clean (0 violations), max_iterations reached, no applicable fixes found, or oscillation detected",
+        "Response includes: iterations_run, final_violation_count, fixes_applied_count, fixes_flagged_count, stop_reason",
+        "Each iteration uses async DRC (from P5-ASYNC-001), not blocking",
+        "If confidence_threshold='medium', medium-confidence fixes are also auto-applied (user opts in to more aggressive fixing)",
+        "Test: job with 3 high-confidence width violations → all auto-fixed in 1 iteration → re-DRC clean"
+      ],
+      "priority": "P0",
+      "estimate": "L",
+      "passes": true,
+      "notes": "Build on existing apply-and-recheck logic in backend/api/routes/fix.py. The key new logic is the confidence-based filter that decides which suggestion_indices to pass to _apply_deltas. Consider extracting the loop into a service class (AutoFixRunner) separate from the route handler. FixSuggestion already has .confidence (FixConfidence enum), .creates_new_violations, .affected_layers, and PolygonDelta.is_removal.",
+      "dependsOn": ["P5-ASYNC-001"]
+    },
+    {
+      "id": "P5-AF-002",
+      "title": "Fix Provenance Log",
+      "description": "As an engineer auditing layout changes, I want every fix (auto-applied or flagged) to have a provenance record stored in SQLite, queryable via API. Each record captures: which rule was violated, before/after polygon coordinates, confidence level, iteration number, whether it was auto-applied or flagged, and why it was flagged. This creates the audit trail needed for tapeout review.",
+      "acceptanceCriteria": [
+        "New SQLite table 'fix_provenance' with columns: id, job_id, iteration, rule_id, violation_category, rule_type, confidence, action (auto_applied|flagged|skipped), flag_reason (nullable), before_points (JSON), after_points (JSON), cell_name, gds_layer, gds_datatype, created_at",
+        "Every fix applied by auto-fix loop writes a provenance row with action='auto_applied'",
+        "Every fix skipped/flagged writes a provenance row with action='flagged' and flag_reason explaining why",
+        "GET /api/jobs/{job_id}/fix/provenance returns all provenance records for a job, ordered by iteration then created_at",
+        "GET /api/jobs/{job_id}/fix/provenance?iteration=3 filters by iteration",
+        "Before/after points are stored as JSON arrays of [x, y] coordinate pairs",
+        "Manual apply-and-recheck endpoint also writes provenance records (not just auto mode)",
+        "Provenance table created alongside jobs table in Database.__init__ (schema migration)",
+        "Test: auto-fix run → query provenance → verify records match applied and flagged fixes"
+      ],
+      "priority": "P0",
+      "estimate": "M",
+      "passes": true,
+      "notes": "Add provenance table schema to backend/jobs/database.py alongside _SCHEMA. Add insert_provenance() and get_provenance() methods to Database class. Wire into both auto-fix loop and existing apply routes. Flag reasons: 'circuit_intent_unknown', 'multi_layer', 'creates_new_violations', 'deletion_fix', 'low_confidence', 'medium_confidence_in_high_mode'.",
+      "dependsOn": ["P5-AF-001"]
+    },
+    {
+      "id": "P5-AF-003",
+      "title": "Regression and Oscillation Detection with Auto-Stop",
+      "description": "As a user, I want the auto-fix loop to detect when fixes are causing regressions (violation count increasing) or oscillations (same category keeps appearing after being fixed) and automatically stop with a clear explanation. Without this, the loop could burn 10 iterations making things worse.",
+      "acceptanceCriteria": [
+        "Track violation count per category per iteration in memory during the auto-fix loop",
+        "Oscillation detected when: category X has N violations in iteration i, 0 in i+1, then N again in i+2 (or similar pattern)",
+        "When oscillation detected: stop loop, return stop_reason='oscillation' with details of which categories are oscillating",
+        "Regression detected when: total violation count increases after an iteration (more violations than before)",
+        "When regression detected: stop loop, return stop_reason='regression' with before/after counts",
+        "Stall detected when: fixes were flagged but none were applicable (0 auto-applied in an iteration)",
+        "Auto-fix response includes iteration_history: [{iteration, total_violations, applied_count, flagged_count}]",
+        "Max iteration cap (from request body, default 10) is a hard stop regardless of progress",
+        "Test: mock DRC that oscillates width violations → loop stops after detecting oscillation, reports it",
+        "Test: mock DRC where fix creates more violations → loop stops after regression, reports it"
+      ],
+      "priority": "P1",
+      "estimate": "M",
+      "passes": true,
+      "notes": "This is logic inside the auto-fix loop from P5-AF-001. Track a dict[str, list[int]] mapping category → [violation_count_per_iteration]. Oscillation = category appears in alternating iterations. Regression = sum(violations) at iteration N > sum at N-1. Stall = no fixes applied in an iteration (all were flagged or no suggestions generated).",
+      "dependsOn": ["P5-AF-001"]
+    },
+    {
+      "id": "P5-AF-004",
+      "title": "Flagged Fixes Review Endpoint",
+      "description": "As an engineer, I want to query all flagged fixes for a job so I can review them, approve/reject individual ones, and optionally re-run with approved fixes applied. This completes the human-in-the-loop workflow: auto-fix runs → some fixes flagged → human reviews → approves subset → re-run with approved fixes.",
+      "acceptanceCriteria": [
+        "GET /api/jobs/{job_id}/fix/flagged returns all flagged provenance records grouped by iteration",
+        "Each flagged record includes: flag_reason, violation_category, rule_type, confidence, before/after points, description",
+        "POST /api/jobs/{job_id}/fix/flagged/approve accepts {provenance_ids: [int]} to approve specific flagged fixes",
+        "Approved flagged fixes are applied to the current GDS and a re-DRC is triggered",
+        "POST /api/jobs/{job_id}/fix/flagged/reject accepts {provenance_ids: [int]} to dismiss flagged fixes",
+        "Rejected fixes update provenance record action from 'flagged' to 'rejected'",
+        "Approved fixes update provenance record action from 'flagged' to 'human_approved'",
+        "After approval + re-DRC, a new auto-fix iteration can continue from where it stopped",
+        "Test: auto-fix flags 2 medium-confidence fixes → GET flagged → approve 1 → re-DRC runs → provenance updated"
+      ],
+      "priority": "P1",
+      "estimate": "M",
+      "passes": true,
+      "notes": "The flagged fixes have their before/after points stored in provenance (from P5-AF-002). Approval means: load current GDS, apply the deltas from the approved provenance records, export new GDS, re-run DRC. This reuses _apply_deltas logic from fix.py but reads deltas from provenance table instead of from FixEngine cache. Add approve/reject routes to backend/api/routes/fix.py.",
+      "dependsOn": ["P5-AF-002", "P5-AF-003"]
+    }
+  ]
+}
