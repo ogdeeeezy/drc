@@ -5,54 +5,54 @@ Open-source DRC tool — PVS alternative for semiconductor layout verification. 
 
 ## Current State
 - **Phases 1-5**: ALL COMPLETE (33/33 stories)
-- **596 unit + 12 E2E tests passing**, frontend builds clean
+- **665 unit + 12 E2E tests passing**, 91% coverage, frontend builds clean
 - **GitHub**: https://github.com/ogdeeeezy/drc — all pushed to main
-- **All PCells DRC-clean**, all committed and pushed
+- **All PCells DRC-clean**, CI/CD enhanced with lint/test/integration/frontend jobs
 
 ## How to Run
 - Backend: `make run` (uvicorn on port 8000)
 - Frontend: `make frontend` (Vite dev on 5173, proxies /api)
-- Tests: `.venv/bin/python -m pytest tests/ -q --ignore=tests/integration` (unit)
+- Tests: `.venv/bin/python -m pytest tests/unit/ -q --cov=backend` (665 tests, 91%)
 - E2E: `.venv/bin/python -m pytest tests/integration/test_e2e_phase5.py -v -s` (requires KLayout)
 
-## Immediate Next: CI/CD Enhancement
+## Immediate Next: Test Coverage → 95%
 
-### Problem
-Basic CI exists at `.github/workflows/ci.yml` (unit tests + lint + frontend build) but needs hardening.
-
-### Plan (detailed at `docs/tmp-cicd-plan.md`)
-1. Add concurrency group (cancel stale runs on rapid pushes)
-2. Split lint into its own job (faster feedback)
-3. Add test coverage reporting (`pytest-cov`)
-4. Add KLayout integration test job (`sudo apt install klayout`, `continue-on-error: true`)
-5. Recommend branch protection settings (GitHub UI, not code)
+### What's Left (fix strategy tests)
+Coverage gap is mostly geometric fix algorithms in `backend/fix/strategies/`:
+- `spacing.py` — 48 uncovered lines (62% → needs violation scenarios with edge pairs)
+- `area.py` — 33 uncovered lines (67% → min area expansion logic)
+- `width.py` — 29 uncovered lines (71% → width expansion with collision checks)
+- `short.py` — 23 uncovered lines (72% → short circuit resolution)
 
 ### Key Files
-- `.github/workflows/ci.yml` — existing workflow to enhance
-- `pyproject.toml` — add `pytest-cov` to dev deps
-- `Makefile` — reference for existing test/lint commands
+- `tests/unit/test_api_coverage.py` — new API route tests (69 tests)
+- `tests/unit/test_fix_strategies.py` — existing strategy tests to extend
+- `docs/tmp-cicd-plan.md` — full CI/CD plan + coverage analysis
+
+### Also Pending
+- **Branch protection** — Enable in GitHub repo settings (manual, not code)
 
 ## E2E Results (Current)
 ```
-PMOS 4-finger (W=1.0 L=0.15 F=4): 0 violations ✓
-Poly resistor (W=0.35 L=2.0 S=2):  0 violations ✓
-NMOS minimum (W=0.30 L=0.15 F=1):  0 violations ✓
-NMOS basic (W=0.5 L=0.15 F=1):     0 violations ✓
-Pipeline (W=0.42 L=0.15 F=2):      0 violations ✓
-LVS NMOS:                          match=True ✓
-MIM capacitor (W=5.0 L=5.0):       0 violations ✓
+PMOS 4-finger (W=1.0 L=0.15 F=4): 0 violations
+Poly resistor (W=0.35 L=2.0 S=2):  0 violations
+NMOS minimum (W=0.30 L=0.15 F=1):  0 violations
+NMOS basic (W=0.5 L=0.15 F=1):     0 violations
+Pipeline (W=0.42 L=0.15 F=2):      0 violations
+LVS NMOS:                          match=True
+MIM capacitor (W=5.0 L=5.0):       0 violations
 ```
 
 ## Gotchas
 - SKY130 DRC deck defaults ALL rule groups to disabled — `DEFAULT_DRC_FLAGS` fixes this
 - KLayout macOS needs Gatekeeper bypass: `sudo xattr -r -d com.apple.quarantine /Applications/KLayout/klayout.app`
 - .lvsdb format is NOT XML — it's S-expression text (custom parser in lvs_parser.py)
-- MOSFET min contactable W is ~0.26µm (licon_size + 2*licon_enc_by_diff), not 0.15µm
-- m1.5 rule: 0.060µm on BOTH edges of ONE adjacent pair (not all 4 sides)
-- Poly resistor licon.1: RPM layer extends beyond poly body → licons overlapping RPM get clipped by DRC
+- MOSFET min contactable W is ~0.26um (licon_size + 2*licon_enc_by_diff), not 0.15um
+- m1.5 rule: 0.060um on BOTH edges of ONE adjacent pair (not all 4 sides)
+- Poly resistor licon.1: RPM layer extends beyond poly body, licons overlapping RPM get clipped by DRC
 - SKY130 DRC deck via2.5: description says "m3 enclosure" but code checks m2 (`m2.enclosing(via2, 0.085)`)
 
-## What's Next (After CI/CD)
+## What's Next (After Coverage)
 1. **Monte Carlo optimization** — klayout.db in-process for 10k+ geometric variants
 2. **LLM-assisted DRC deck generator** — auto-generate rules from DRM tables
 3. **More PDKs** — GF180, ASAP7 (last — solidify SKY130 framework first)

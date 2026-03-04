@@ -205,3 +205,23 @@
 
 ### Next
 - MIM capacitor investigation + auto-fix confidence tuning
+
+---
+
+## Archived: 2026-03-04 | Git: 01d1ef0
+
+## Session 11: 2026-03-03 — PCell DRC fixes (partial)
+
+### Done
+- **Stream A: LVS deck fix** — `sky130A.lvs` line 62: `.inverted` → `extent.not(nwell)`. LVS now runs and matches (match=True).
+- **Stream B4: MIM cap via2.5** — Added `via2_enc_by_met3_adj = 0.085` to rules, used as via2 array margin in `capacitor.py`. (**Still 4 violations in E2E — needs investigation**)
+- **Stream B3: Poly resistor licon.1** — Root cause was NOT floating-point (as plan suggested). Licons at terminal contacts overlap RPM region; DRC rule `licon.not(prec_resistor)` clips them. Fix: added `licon_offset` calculation using `rpm_enc_poly + contact_to_rpm + licon_size/2`, repositioned contact centers. **0 violations**.
+- **Stream B1+B2: MOSFET met1 (partial)** — Added `met1_min_spacing = 0.140` to rules. Increased `internal_sd` from 0.280→0.370 (met1 pad + spacing). Narrowed S/D met1 pads (use `met1_enc_mcon` 0.030 in X, `met1_enc_mcon_adj` 0.060 in Y for m1.5). Added m1.6 min area enforcement on gate met1 pads. **PMOS 4-finger: 0 violations. NMOS minimum: 0 violations. NMOS basic: 6 violations (still failing). Pipeline 2-finger: 11 violations.**
+
+### Decisions
+- Poly resistor licon fix: plan was wrong about floating-point — real root cause was RPM overlap clipping licons via DRC subtraction
+- MOSFET internal_sd widened to 0.370 to accommodate met1 pads + m1.2 spacing (was 0.280, only fit licons)
+- m1.5 rule (0.060 on adj edges) satisfied by using met1_enc_mcon_adj in Y direction of S/D pads
+
+### Next
+- Continue with MIM cap and auto-fix confidence (see Session 12)

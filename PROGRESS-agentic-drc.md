@@ -1,6 +1,25 @@
 # PROGRESS-agentic-drc
 
-> Sessions 1-10 archived → `docs/archive/archive-progress-agentic-drc.md`
+> Sessions 1-11 archived → `docs/archive/archive-progress-agentic-drc.md`
+
+---
+
+## Session 14: 2026-03-04 — CI/CD enhancement + API test coverage
+
+### Done
+- **CI/CD enhanced** (`7881088`) — Split lint job, added pytest-cov, KLayout integration job (continue-on-error), concurrency group. `pytest-cov>=5.0` added to dev deps.
+- **API route test coverage** (`01d1ef0`) — 69 new tests covering error paths across all API routes (drc, export, fix, layout, lvs, upload). Coverage 86% → 91%. 665 unit tests passing.
+- **Coverage analysis documented** — Added practical limits note to `docs/tmp-cicd-plan.md`: 95% achievable, true 100% impractical due to KLayout subprocess paths and OS-specific config.
+
+### Decisions
+- Target 95% coverage floor, not 100% — remaining 9% is defensive error handling best verified by integration tests
+- CI integration job uses `continue-on-error: true` — KLayout apt install may not work on all GitHub runners
+
+### Next
+- **Fix strategy tests** — Cover `spacing.py` (48 lines), `area.py` (33), `width.py` (29), `short.py` (23) for ~95% total
+- **Branch protection** — Enable in GitHub repo settings: require `lint`, `test`, `frontend` to pass
+- Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
+- LLM-assisted DRC deck generator — auto-generate rules from DRM tables
 
 ---
 
@@ -16,9 +35,7 @@
 - Shrink fixes intentionally kept at medium confidence — shrinking polygons risks width/area violations
 
 ### Next
-- **CI/CD implementation** — Enhance `.github/workflows/ci.yml` per plan in `docs/tmp-cicd-plan.md`
-- Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
-- LLM-assisted DRC deck generator — auto-generate rules from DRM tables
+- CI/CD implementation (done in Session 14)
 
 ---
 
@@ -32,27 +49,6 @@
 ### Decisions
 - Gate contact Y computed dynamically from actual S/D met1 extent (not hardcoded from diff edge), ensuring m1.2 clearance regardless of W or contact count
 - m1.6 enforcement on S/D met1 done BEFORE gate contact positioning so the extended bounds are used for clearance calculation
-- `gc_ext` split into `gc_ext_top`/`gc_ext_bot` since dynamic positioning makes them asymmetric in principle (symmetric in practice for gate_contact="both")
 
 ### Next
-- **MIM capacitor** — 4 violations remain (rule unknown). Need to run E2E with `-s` and examine violation categories, or read DRC report XML
-- **Stream C: Auto-fix confidence** — Promote `MinSpacingFix` to high confidence when safe. `backend/fix/strategies/spacing.py`
-- **Monte Carlo optimization** — klayout.db in-process for 10k+ geometric variants
-
----
-
-## Session 11: 2026-03-03 — PCell DRC fixes (partial)
-
-### Done
-- **Stream A: LVS deck fix** — `sky130A.lvs` line 62: `.inverted` → `extent.not(nwell)`. LVS now runs and matches (match=True).
-- **Stream B4: MIM cap via2.5** — Added `via2_enc_by_met3_adj = 0.085` to rules, used as via2 array margin in `capacitor.py`. (**Still 4 violations in E2E — needs investigation**)
-- **Stream B3: Poly resistor licon.1** — Root cause was NOT floating-point (as plan suggested). Licons at terminal contacts overlap RPM region; DRC rule `licon.not(prec_resistor)` clips them. Fix: added `licon_offset` calculation using `rpm_enc_poly + contact_to_rpm + licon_size/2`, repositioned contact centers. **0 violations**.
-- **Stream B1+B2: MOSFET met1 (partial)** — Added `met1_min_spacing = 0.140` to rules. Increased `internal_sd` from 0.280→0.370 (met1 pad + spacing). Narrowed S/D met1 pads (use `met1_enc_mcon` 0.030 in X, `met1_enc_mcon_adj` 0.060 in Y for m1.5). Added m1.6 min area enforcement on gate met1 pads. **PMOS 4-finger: 0 violations. NMOS minimum: 0 violations. NMOS basic: 6 violations (still failing). Pipeline 2-finger: 11 violations.**
-
-### Decisions
-- Poly resistor licon fix: plan was wrong about floating-point — real root cause was RPM overlap clipping licons via DRC subtraction
-- MOSFET internal_sd widened to 0.370 to accommodate met1 pads + m1.2 spacing (was 0.280, only fit licons)
-- m1.5 rule (0.060 on adj edges) satisfied by using met1_enc_mcon_adj in Y direction of S/D pads
-
-### Next
-- Continue with MIM cap and auto-fix confidence (see Session 12)
+- MIM capacitor + auto-fix confidence (done in Session 13)
