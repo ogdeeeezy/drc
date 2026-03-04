@@ -4,6 +4,27 @@
 
 ---
 
+## Session 11: 2026-03-03 — PCell DRC fixes (partial)
+
+### Done
+- **Stream A: LVS deck fix** — `sky130A.lvs` line 62: `.inverted` → `extent.not(nwell)`. LVS now runs and matches (match=True).
+- **Stream B4: MIM cap via2.5** — Added `via2_enc_by_met3_adj = 0.085` to rules, used as via2 array margin in `capacitor.py`. (**Still 4 violations in E2E — needs investigation**)
+- **Stream B3: Poly resistor licon.1** — Root cause was NOT floating-point (as plan suggested). Licons at terminal contacts overlap RPM region; DRC rule `licon.not(prec_resistor)` clips them. Fix: added `licon_offset` calculation using `rpm_enc_poly + contact_to_rpm + licon_size/2`, repositioned contact centers. **0 violations**.
+- **Stream B1+B2: MOSFET met1 (partial)** — Added `met1_min_spacing = 0.140` to rules. Increased `internal_sd` from 0.280→0.370 (met1 pad + spacing). Narrowed S/D met1 pads (use `met1_enc_mcon` 0.030 in X, `met1_enc_mcon_adj` 0.060 in Y for m1.5). Added m1.6 min area enforcement on gate met1 pads. **PMOS 4-finger: 0 violations. NMOS minimum: 0 violations. NMOS basic: 6 violations (still failing). Pipeline 2-finger: 11 violations.**
+
+### Decisions
+- Poly resistor licon fix: plan was wrong about floating-point — real root cause was RPM overlap clipping licons via DRC subtraction
+- MOSFET internal_sd widened to 0.370 to accommodate met1 pads + m1.2 spacing (was 0.280, only fit licons)
+- m1.5 rule (0.060 on adj edges) satisfied by using met1_enc_mcon_adj in Y direction of S/D pads
+
+### Next
+- **MOSFET m1.2 Y-direction gap** — S/D met1 top edge too close to gate contact met1 bottom edge (0.095µm gap, need ≥0.140µm). Needs dynamic gate contact Y positioning. See detailed analysis in HANDOFF.
+- **MOSFET m1.6 area** — S/D met1 pad area 0.0667µm² < 0.083µm² for narrow W. Need Y extension.
+- **MIM cap investigation** — 4 violations remain despite via2.5 margin fix. May be a different rule or the margin isn't being applied correctly.
+- **Stream C: Auto-fix confidence** — Not started. `backend/fix/strategies/spacing.py`
+
+---
+
 ## Session 10: 2026-03-03 — E2E validation + issue triage
 
 ### Done
@@ -18,16 +39,7 @@
 - PCell DRC violations are real bugs, not test issues — need generator fixes
 
 ### Next
-- **Fix issues surfaced by E2E** (plan ready, not yet executed):
-  1. LVS deck: replace `.inverted` with `extent.not(nwell)` (KLayout 0.30.6 compat)
-  2. MOSFET: fix m1.2 spacing (met1 pads too close) + m1.7 area (gate contact pads too small)
-  3. Poly resistor: fix licon.1 exact size (0.170×0.170)
-  4. MIM cap: fix via2.5 enclosure (met3 enc of via2, need 0.085µm on adj edges)
-  5. Auto-fix: promote spacing fixes to high confidence when conditions are clear
-- **Monte Carlo optimization** — klayout.db in-process for 10k+ geometric variants
-- **LLM-assisted DRC deck generator** — auto-generate rules from DRM tables
-- **CI/CD** — GitHub Actions for test + lint on PR
-- **More PDKs** — GF180, ASAP7 (last)
+- Continue MOSFET met1 fix (see Session 11)
 
 ---
 
