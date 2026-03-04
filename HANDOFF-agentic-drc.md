@@ -16,6 +16,7 @@ Open-source DRC tool — PVS alternative for semiconductor layout verification. 
 - E2E: `.venv/bin/python -m pytest tests/integration/test_e2e_phase5.py -v -s` (requires KLayout)
 
 ## Immediate Next
+- **Implement error hints** — Full plan at `docs/tmp-error-hints-plan.md`. Adds centralized `error_hints.py` (regex→hint mapping), `hint` field on Job model/DB, route wiring, amber tooltip UI. ~270 lines, 10 files. Start with `error_hints.py` + tests.
 - **Branch protection** — Enable in GitHub repo settings (manual): require `lint`, `test`, `frontend` to pass
 - **Monte Carlo optimization** — klayout.db in-process for 10k+ geometric variants
 - **LLM-assisted DRC deck generator** — auto-generate rules from DRM tables
@@ -25,6 +26,7 @@ Open-source DRC tool — PVS alternative for semiconductor layout verification. 
 - `tests/unit/test_fix_strategies.py` — 59 strategy tests (21 original + 38 extended coverage)
 - `tests/unit/test_api_coverage.py` — 69 API route tests
 - `docs/tmp-cicd-plan.md` — CI/CD plan + coverage analysis
+- `docs/tmp-error-hints-plan.md` — Error hints implementation plan (READY TO IMPLEMENT)
 
 ## E2E Results (Current)
 ```

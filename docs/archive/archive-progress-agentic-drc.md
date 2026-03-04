@@ -240,3 +240,21 @@
 
 ### Next
 - Continue with MIM cap and auto-fix confidence (see Session 12)
+
+---
+
+## Archived: 2026-03-04 | Git: 6436668
+
+### Session 13: 2026-03-04 — MIM cap DRC-clean + auto-fix confidence
+
+#### Done
+- **MIM capacitor DRC-clean** (`b63629b`) — Root cause: via2.5 in SKY130 DRC deck checks `m2.enclosing(via2, 0.085)` (met2, not met3 as description says). Met2 pad margin was 0.040 (via2.4) instead of 0.085 (via2.5). Added `via2_enc_by_met2_adj` constant. **All PCells now 0 violations.**
+- **Stream C: MinSpacingFix confidence promotion** (`ebaa65a`) — Move fixes promoted to `FixConfidence.high` when: (1) deficit <= rule value, (2) no same-layer polygon collision within min_spacing of moved position. Collision check uses `SpatialIndex.query_nearby()`. Shrink fixes stay at medium. 596 unit + 12 E2E passing.
+- **CI/CD plan drafted** — `docs/tmp-cicd-plan.md` with full enhancement plan for `.github/workflows/ci.yml`. Was interrupted before implementation.
+
+#### Decisions
+- via2.5 DRC deck bug: description says "m3 enclosure" but code checks m2. Documented in HANDOFF gotchas.
+- Shrink fixes intentionally kept at medium confidence — shrinking polygons risks width/area violations
+
+#### Next
+- CI/CD implementation (done in Session 14)

@@ -1,6 +1,23 @@
 # PROGRESS-agentic-drc
 
-> Sessions 1-12 archived → `docs/archive/archive-progress-agentic-drc.md`
+> Sessions 1-14 archived → `docs/archive/archive-progress-agentic-drc.md`
+
+---
+
+## Session 16: 2026-03-04 — Error hints plan + coverage gap analysis
+
+### Done
+- **Coverage gap analysis** — Identified all untested error paths in the 6% gap: OSError subprocess failures, timeouts, missing DRC decks, OS-specific config detection, PCell validation guards. Mapped each to user-facing impact (cryptic vs actionable).
+- **Error hints plan** (`docs/tmp-error-hints-plan.md`) — Full implementation plan for centralized `error_hints.py` module (regex→hint mapping), `hint` field on Job model/DB, API wiring, and amber tooltip UI in frontend. ~270 lines across 10 files.
+
+### Decisions
+- Centralized hint mapping (single `error_hints.py`) over adding `hint` field to each error class — keeps presentation concerns separate, easier to maintain
+- Always-visible hint box (amber below red error) over hover tooltip — more accessible, no hidden info
+
+### Next
+- **Implement error hints plan** — `docs/tmp-error-hints-plan.md` has full spec. Start with `error_hints.py` + tests, then Job model, then routes, then frontend.
+- Branch protection — Enable in GitHub repo settings
+- Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
 
 ---
 
@@ -11,9 +28,7 @@
 - **Coverage pushed** — spacing.py 62→98%, area.py 67→96%, width.py 71→95%, short.py 72→95%. Overall 91% → 94%.
 
 ### Next
-- **Branch protection** — Enable in GitHub repo settings: require `lint`, `test`, `frontend` to pass
-- Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
-- LLM-assisted DRC deck generator — auto-generate rules from DRM tables
+- Error hints + remaining coverage (done in Session 16 planning)
 
 ---
 
@@ -30,19 +45,3 @@
 
 ### Next
 - Fix strategy tests (done in Session 15)
-
----
-
-## Session 13: 2026-03-04 — MIM cap DRC-clean + auto-fix confidence
-
-### Done
-- **MIM capacitor DRC-clean** (`b63629b`) — Root cause: via2.5 in SKY130 DRC deck checks `m2.enclosing(via2, 0.085)` (met2, not met3 as description says). Met2 pad margin was 0.040 (via2.4) instead of 0.085 (via2.5). Added `via2_enc_by_met2_adj` constant. **All PCells now 0 violations.**
-- **Stream C: MinSpacingFix confidence promotion** (`ebaa65a`) — Move fixes promoted to `FixConfidence.high` when: (1) deficit <= rule value, (2) no same-layer polygon collision within min_spacing of moved position. Collision check uses `SpatialIndex.query_nearby()`. Shrink fixes stay at medium. 596 unit + 12 E2E passing.
-- **CI/CD plan drafted** — `docs/tmp-cicd-plan.md` with full enhancement plan for `.github/workflows/ci.yml`. Was interrupted before implementation.
-
-### Decisions
-- via2.5 DRC deck bug: description says "m3 enclosure" but code checks m2. Documented in HANDOFF gotchas.
-- Shrink fixes intentionally kept at medium confidence — shrinking polygons risks width/area violations
-
-### Next
-- CI/CD implementation (done in Session 14)
