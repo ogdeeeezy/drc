@@ -230,6 +230,44 @@ class TestMinSpacingFix:
         assert suggestion is not None
         assert suggestion.rule_type == "min_spacing"
         assert len(suggestion.deltas) >= 1
+        # Small deficit (0.04um < 0.14um rule), no third polygon → high confidence
+        assert suggestion.confidence == FixConfidence.high
+
+    def test_move_fix_medium_confidence_when_nearby_collision(self, pdk):
+        strategy = MinSpacingFix()
+        # Two polygons too close (gap 0.10, need 0.14). poly1 is moved left by 0.04.
+        # Third polygon sits to the left of poly1, within min_spacing of moved position.
+        poly1 = _poly([(0, 0), (1, 0), (1, 1), (0, 1)])
+        poly2 = _poly([(1.10, 0), (2.10, 0), (2.10, 1), (1.10, 1)])
+        # poly1 moves to (-0.04, 0)-(0.96, 1). poly3 left edge at -0.15 is
+        # within 0.14 of moved poly1's left edge (-0.04), triggering collision.
+        poly3 = _poly([(-0.15, 0), (-0.05, 0), (-0.05, 1), (-0.15, 1)])
+        si = SpatialIndex.from_polygons([poly1, poly2, poly3])
+
+        violation = Violation(
+            category="m1.2",
+            description="spacing",
+            cell_name="TOP",
+            rule_type="min_spacing",
+            severity=6,
+            value_um=0.140,
+            geometries=[
+                ViolationGeometry(
+                    geometry_type=GeometryType.edge_pair,
+                    edge_pair=EdgePair(
+                        edge1_start=(1.0, 0),
+                        edge1_end=(1.0, 1.0),
+                        edge2_start=(1.10, 0),
+                        edge2_end=(1.10, 1.0),
+                    ),
+                )
+            ],
+        )
+
+        suggestion = strategy.suggest_fix(violation, violation.geometries[0], pdk, si)
+        assert suggestion is not None
+        # Third polygon is within min_spacing of moved position → medium confidence
+        assert suggestion.confidence == FixConfidence.medium
 
     def test_no_fix_when_sufficient_spacing(self, pdk):
         strategy = MinSpacingFix()

@@ -77,7 +77,8 @@ class MinSpacingFix(FixStrategy):
 
         if prefer_move:
             return self._suggest_move_fix(
-                violation, poly1, poly2, deficit, is_horizontal_gap, grid, pdk
+                violation, poly1, poly2, deficit, is_horizontal_gap, grid, pdk,
+                spatial_index,
             )
         else:
             return self._suggest_shrink_fix(
@@ -115,7 +116,7 @@ class MinSpacingFix(FixStrategy):
 
         return poly1, poly2
 
-    def _suggest_move_fix(self, violation, poly1, poly2, deficit, is_horizontal_gap, grid, pdk):
+    def _suggest_move_fix(self, violation, poly1, poly2, deficit, is_horizontal_gap, grid, pdk, spatial_index):
         """Move the smaller polygon away by the full deficit."""
         # Move the polygon with smaller area (less connected, easier to move)
         from backend.core.geometry_utils import polygon_area
@@ -165,6 +166,10 @@ class MinSpacingFix(FixStrategy):
             modified_points=new_points,
         )
 
+        confidence = self._assess_move_confidence(
+            to_move, stationary, new_points, move_amount, violation, spatial_index
+        )
+
         return FixSuggestion(
             violation_category=violation.category,
             rule_type=self.rule_type,
@@ -173,9 +178,47 @@ class MinSpacingFix(FixStrategy):
                 f"min spacing {violation.value_um:.3f}um"
             ),
             deltas=[delta],
-            confidence=FixConfidence.medium,
+            confidence=confidence,
             priority=violation.severity,
         )
+
+    def _assess_move_confidence(
+        self, to_move, stationary, new_points, move_amount, violation, spatial_index
+    ) -> FixConfidence:
+        """Promote to high confidence when the move is small, single-layer, no collision.
+
+        Criteria for high confidence:
+        1. Small move: deficit <= rule value (move is at most the min spacing distance)
+        2. No collision: moved polygon doesn't overlap or crowd other same-layer polygons
+        """
+        min_spacing = violation.value_um
+        if min_spacing is None:
+            return FixConfidence.medium
+
+        # 1. Small move check: deficit should not exceed the rule value
+        if move_amount > min_spacing:
+            return FixConfidence.medium
+
+        # 2. Collision check: query for same-layer polygons near the moved position
+        new_bbox = polygon_bbox(new_points)
+        # Expand search by min_spacing to catch spacing violations the move might create
+        nearby = spatial_index.query_nearby(
+            new_bbox,
+            margin=min_spacing,
+            layer=to_move.polygon.gds_layer,
+            datatype=to_move.polygon.gds_datatype,
+        )
+
+        for neighbor in nearby:
+            # Skip the polygon being moved and the stationary one (already accounted for)
+            if neighbor.index_id == to_move.index_id:
+                continue
+            if neighbor.index_id == stationary.index_id:
+                continue
+            # Another same-layer polygon is within min_spacing of the new position
+            return FixConfidence.medium
+
+        return FixConfidence.high
 
     def _suggest_shrink_fix(self, violation, poly1, poly2, deficit, is_horizontal_gap, grid, pdk):
         """Shrink both polygons by deficit/2 each."""

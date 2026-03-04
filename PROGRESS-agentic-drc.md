@@ -4,6 +4,23 @@
 
 ---
 
+## Session 13: 2026-03-04 — MIM cap DRC-clean + auto-fix confidence
+
+### Done
+- **MIM capacitor DRC-clean** (`b63629b`) — Root cause: via2.5 in SKY130 DRC deck checks `m2.enclosing(via2, 0.085)` (met2, not met3 as description says). Met2 pad margin was 0.040 (via2.4) instead of 0.085 (via2.5). Added `via2_enc_by_met2_adj` constant. **All PCells now 0 violations.**
+- **Stream C: MinSpacingFix confidence promotion** — Move fixes promoted to `FixConfidence.high` when: (1) deficit <= rule value, (2) no same-layer polygon collision within min_spacing of moved position. Collision check uses `SpatialIndex.query_nearby()`. Shrink fixes stay at medium. 596 unit + 12 E2E passing.
+
+### Decisions
+- via2.5 DRC deck bug: description says "m3 enclosure" but code checks m2. Documented in HANDOFF gotchas.
+- Shrink fixes intentionally kept at medium confidence — shrinking polygons risks width/area violations
+
+### Next
+- Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
+- LLM-assisted DRC deck generator — auto-generate rules from DRM tables
+- CI/CD — GitHub Actions for test + lint on PR
+
+---
+
 ## Session 12: 2026-03-04 — MOSFET met1 DRC-clean (m1.2 + m1.6)
 
 ### Done
