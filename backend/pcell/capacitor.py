@@ -39,6 +39,7 @@ class _SKY130MIMRules:
     via2_size: float = 0.200  # via2.1a
     via2_spacing: float = 0.200  # via2.2
     via2_enc_by_met2: float = 0.040  # via2.4 (met2 enclosure of via2)
+    via2_enc_by_met2_adj: float = 0.085  # via2.5 (met2 enc of via2 on 2 adj edges)
     via2_enc_by_met3: float = 0.065  # m3.4 (met3 enclosure of via2)
     via2_enc_by_met3_adj: float = 0.085  # via2.5 (met3 enc of via2 on 2 adj edges)
 
@@ -242,7 +243,9 @@ class MIMCapGenerator(PCellGenerator):
 
         # 6. Met2 — BOT pin routing (covers via2 array) -------------------------
         if via2_positions:
-            met2_margin = snap(r.via2_enc_by_met2)
+            # via2.5: met2 must enclose via2 by 0.085µm on 2 adjacent edges
+            # (DRC deck checks m2.enclosing despite description saying m3)
+            met2_margin = snap(r.via2_enc_by_met2_adj)
             met2_x0 = snap(via2_positions[0][0] - r.via2_size / 2 - met2_margin)
             met2_y0 = snap(via2_positions[0][1] - r.via2_size / 2 - met2_margin)
             met2_x1 = snap(via2_positions[-1][0] + r.via2_size / 2 + met2_margin)
