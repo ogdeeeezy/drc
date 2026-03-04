@@ -78,6 +78,20 @@ The CLI binary is what's needed for DRC/LVS — that's the apt package.
 - `backend/config.py` — KLayout binary detection
 - `tests/integration/test_e2e_phase5.py` — E2E tests (auto-skip if no klayout)
 
+## Coverage Target: Practical Limits
+
+**Baseline**: 86% (596 unit tests, 3830 lines, 537 uncovered).
+
+**~95% is achievable** with API route tests + fix strategy edge cases. The biggest gaps are FastAPI endpoint handlers (259 lines) and geometric fix algorithms (155 lines) — both testable with mocks.
+
+**True 100% is impractical** for these reasons:
+- **KLayout subprocess error paths** (`drc_runner.py`, `lvs_runner.py`): Lines that handle KLayout binary not found, subprocess crashes, malformed output. These require mocking `subprocess.run` failures — fragile and low ROI since integration tests cover the happy path.
+- **OS-specific config detection** (`config.py`): macOS app bundle paths vs Linux PATH lookup. Would need platform-specific mocking.
+- **Defensive unreachable branches**: Some `except` clauses and fallback returns exist as safety nets for impossible-in-practice scenarios (e.g., corrupt GDSII producing unexpected parser states).
+- **PCell validation guards** (`mosfet.py`, `capacitor.py`, `resistor.py`): Parameter range checks that raise `ValueError` for physically nonsensical inputs (negative widths, etc.) — testable but low value.
+
+**Recommendation**: Target 95% floor in CI. Don't chase the last 5% — it's defensive code that's better verified by integration/E2E tests.
+
 ## Verification
 1. Push to a branch, open PR → CI should run all jobs
 2. Unit tests + lint should pass (they pass locally)
