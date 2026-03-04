@@ -10,6 +10,7 @@ export interface JobSummary {
   created_at: number;
   total_violations: number;
   error: string | null;
+  hint: string | null;
   iteration: number;
 }
 

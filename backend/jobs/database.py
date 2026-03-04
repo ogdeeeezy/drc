@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     top_cell TEXT,
     total_violations INTEGER DEFAULT 0,
     error TEXT,
+    hint TEXT,
     iteration INTEGER DEFAULT 1,
     netlist_path TEXT,
     lvs_report_path TEXT
@@ -60,6 +61,7 @@ JOB_COLUMNS = (
     "top_cell",
     "total_violations",
     "error",
+    "hint",
     "iteration",
     "netlist_path",
     "lvs_report_path",
@@ -80,6 +82,11 @@ class Database:
         conn = self._get_conn()
         conn.execute(_SCHEMA)
         conn.execute(_PROVENANCE_SCHEMA)
+        # Migration: add hint column for existing databases
+        try:
+            conn.execute("ALTER TABLE jobs ADD COLUMN hint TEXT")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
         conn.commit()
 
     def _get_conn(self) -> sqlite3.Connection:

@@ -275,6 +275,62 @@ class TestDRCRunMocked:
                 runner.run(sample_gds, pdk_config, output_dir=tmp_path)
 
 
+class TestDRCRunOSErrors:
+    """Test OSError paths in DRC runner (exec format, permission denied)."""
+
+    @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
+    @patch("subprocess.Popen")
+    def test_oserror_exec_format(self, mock_popen, mock_avail, pdk_config, sample_gds, tmp_path):
+        mock_popen.side_effect = OSError(8, "Exec format error")
+        runner = DRCRunner()
+        with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
+            deck_dir = tmp_path / "pdk" / "configs" / "test_pdk"
+            deck_dir.mkdir(parents=True, exist_ok=True)
+            (deck_dir / "test.drc").write_text("# stub")
+            with pytest.raises(DRCError, match="Failed to execute KLayout"):
+                runner.run(sample_gds, pdk_config, output_dir=tmp_path)
+
+    @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
+    @patch("subprocess.Popen")
+    def test_oserror_permission_denied(self, mock_popen, mock_avail, pdk_config, sample_gds, tmp_path):
+        mock_popen.side_effect = OSError(13, "Permission denied")
+        runner = DRCRunner()
+        with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
+            deck_dir = tmp_path / "pdk" / "configs" / "test_pdk"
+            deck_dir.mkdir(parents=True, exist_ok=True)
+            (deck_dir / "test.drc").write_text("# stub")
+            with pytest.raises(DRCError, match="Failed to execute KLayout"):
+                runner.run(sample_gds, pdk_config, output_dir=tmp_path)
+
+    @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
+    @patch("asyncio.create_subprocess_exec")
+    async def test_oserror_exec_format_async(
+        self, mock_create_subprocess, mock_avail, pdk_config, sample_gds, tmp_path
+    ):
+        mock_create_subprocess.side_effect = OSError(8, "Exec format error")
+        runner = DRCRunner()
+        with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
+            deck_dir = tmp_path / "pdk" / "configs" / "test_pdk"
+            deck_dir.mkdir(parents=True, exist_ok=True)
+            (deck_dir / "test.drc").write_text("# stub")
+            with pytest.raises(DRCError, match="Failed to execute KLayout"):
+                await runner.async_run(sample_gds, pdk_config, output_dir=tmp_path)
+
+    @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
+    @patch("asyncio.create_subprocess_exec")
+    async def test_oserror_permission_denied_async(
+        self, mock_create_subprocess, mock_avail, pdk_config, sample_gds, tmp_path
+    ):
+        mock_create_subprocess.side_effect = OSError(13, "Permission denied")
+        runner = DRCRunner()
+        with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
+            deck_dir = tmp_path / "pdk" / "configs" / "test_pdk"
+            deck_dir.mkdir(parents=True, exist_ok=True)
+            (deck_dir / "test.drc").write_text("# stub")
+            with pytest.raises(DRCError, match="Failed to execute KLayout"):
+                await runner.async_run(sample_gds, pdk_config, output_dir=tmp_path)
+
+
 class TestDRCResult:
     def test_violation_summary(self):
         from backend.core.violation_models import (

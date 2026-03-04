@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile
 
 from backend.api.deps import get_job_manager, get_pdk_registry
+from backend.core.error_hints import get_hint
 from backend.core.lvs_parser import LVSParseError, LVSReportParser
 from backend.core.lvs_runner import LVSError, LVSRunner
 from backend.jobs.manager import JobStatus
@@ -90,7 +91,7 @@ async def _run_lvs_background(
     try:
         pdk = registry.load(pdk_name)
     except FileNotFoundError as e:
-        manager.update_status(job_id, JobStatus.lvs_failed, error=str(e))
+        manager.update_status(job_id, JobStatus.lvs_failed, error=str(e), hint=get_hint(str(e)))
         return
 
     runner = LVSRunner()
@@ -103,11 +104,11 @@ async def _run_lvs_background(
         )
     except LVSError as e:
         logger.error("LVS failed for job %s: %s", job_id, e)
-        manager.update_status(job_id, JobStatus.lvs_failed, error=str(e))
+        manager.update_status(job_id, JobStatus.lvs_failed, error=str(e), hint=get_hint(str(e)))
         return
     except FileNotFoundError as e:
         logger.error("File not found during LVS for job %s: %s", job_id, e)
-        manager.update_status(job_id, JobStatus.lvs_failed, error=str(e))
+        manager.update_status(job_id, JobStatus.lvs_failed, error=str(e), hint=get_hint(str(e)))
         return
 
     # Parse the report to get match status

@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException
 
 from backend.api.deps import get_job_manager, get_pdk_registry
 from backend.core.drc_runner import DRCError, DRCRunner
+from backend.core.error_hints import get_hint
 from backend.jobs.manager import JobStatus
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ async def _run_drc_background(
     try:
         pdk = registry.load(pdk_name)
     except FileNotFoundError as e:
-        manager.update_status(job_id, JobStatus.drc_failed, error=str(e))
+        manager.update_status(job_id, JobStatus.drc_failed, error=str(e), hint=get_hint(str(e)))
         return
 
     runner = DRCRunner()
@@ -45,11 +46,11 @@ async def _run_drc_background(
         )
     except DRCError as e:
         logger.error("DRC failed for job %s: %s", job_id, e)
-        manager.update_status(job_id, JobStatus.drc_failed, error=str(e))
+        manager.update_status(job_id, JobStatus.drc_failed, error=str(e), hint=get_hint(str(e)))
         return
     except FileNotFoundError as e:
         logger.error("File not found during DRC for job %s: %s", job_id, e)
-        manager.update_status(job_id, JobStatus.drc_failed, error=str(e))
+        manager.update_status(job_id, JobStatus.drc_failed, error=str(e), hint=get_hint(str(e)))
         return
 
     manager.update_status(

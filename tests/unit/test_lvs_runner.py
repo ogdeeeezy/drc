@@ -358,6 +358,58 @@ class TestLVSRunMocked:
                 )
 
 
+class TestLVSRunOSErrors:
+    """Test OSError paths in LVS runner (exec format, permission denied)."""
+
+    @patch("backend.core.lvs_runner.LVSRunner.check_klayout_available", return_value=True)
+    @patch("subprocess.Popen")
+    def test_oserror_exec_format(
+        self, mock_popen, mock_avail, pdk_config_with_lvs, sample_gds, sample_netlist, tmp_path
+    ):
+        mock_popen.side_effect = OSError(8, "Exec format error")
+        runner = LVSRunner()
+        with patch("backend.core.lvs_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
+            with pytest.raises(LVSError, match="Failed to execute KLayout"):
+                runner.run(sample_gds, sample_netlist, pdk_config_with_lvs, output_dir=tmp_path)
+
+    @patch("backend.core.lvs_runner.LVSRunner.check_klayout_available", return_value=True)
+    @patch("subprocess.Popen")
+    def test_oserror_permission_denied(
+        self, mock_popen, mock_avail, pdk_config_with_lvs, sample_gds, sample_netlist, tmp_path
+    ):
+        mock_popen.side_effect = OSError(13, "Permission denied")
+        runner = LVSRunner()
+        with patch("backend.core.lvs_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
+            with pytest.raises(LVSError, match="Failed to execute KLayout"):
+                runner.run(sample_gds, sample_netlist, pdk_config_with_lvs, output_dir=tmp_path)
+
+    @patch("backend.core.lvs_runner.LVSRunner.check_klayout_available", return_value=True)
+    @patch("asyncio.create_subprocess_exec")
+    async def test_oserror_exec_format_async(
+        self, mock_create_subprocess, mock_avail, pdk_config_with_lvs, sample_gds, sample_netlist, tmp_path
+    ):
+        mock_create_subprocess.side_effect = OSError(8, "Exec format error")
+        runner = LVSRunner()
+        with patch("backend.core.lvs_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
+            with pytest.raises(LVSError, match="Failed to execute KLayout"):
+                await runner.async_run(
+                    sample_gds, sample_netlist, pdk_config_with_lvs, output_dir=tmp_path
+                )
+
+    @patch("backend.core.lvs_runner.LVSRunner.check_klayout_available", return_value=True)
+    @patch("asyncio.create_subprocess_exec")
+    async def test_oserror_permission_denied_async(
+        self, mock_create_subprocess, mock_avail, pdk_config_with_lvs, sample_gds, sample_netlist, tmp_path
+    ):
+        mock_create_subprocess.side_effect = OSError(13, "Permission denied")
+        runner = LVSRunner()
+        with patch("backend.core.lvs_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
+            with pytest.raises(LVSError, match="Failed to execute KLayout"):
+                await runner.async_run(
+                    sample_gds, sample_netlist, pdk_config_with_lvs, output_dir=tmp_path
+                )
+
+
 class TestLVSResult:
     def test_result_attributes(self):
         result = LVSResult(

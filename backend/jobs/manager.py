@@ -42,6 +42,7 @@ class Job:
     top_cell: str | None = None
     total_violations: int = 0
     error: str | None = None
+    hint: str | None = None
     iteration: int = 1
     netlist_path: str | None = None
     lvs_report_path: str | None = None

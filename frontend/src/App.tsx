@@ -27,6 +27,7 @@ export function App() {
   const [fixResult, setFixResult] = useState<SuggestResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
   const [hiddenLayers, setHiddenLayers] = useState<Set<string>>(new Set());
   const [selectedViolation, setSelectedViolation] = useState<Violation | null>(
     null
@@ -46,6 +47,7 @@ export function App() {
     if (!file) return;
     setLoading(true);
     setError(null);
+    setHint(null);
     try {
       const result = await api.upload(file);
       setJobId(result.job_id);
@@ -63,6 +65,7 @@ export function App() {
     if (!jobId) return;
     setLoading(true);
     setError(null);
+    setHint(null);
     try {
       const result = await api.runDRC(jobId);
       setDrcResult(result);
@@ -80,6 +83,7 @@ export function App() {
     if (!jobId) return;
     setLoading(true);
     setError(null);
+    setHint(null);
     try {
       const result = await api.suggestFixes(jobId);
       setFixResult(result);
@@ -96,6 +100,7 @@ export function App() {
     if (!file || !jobId) return;
     setLoading(true);
     setError(null);
+    setHint(null);
     try {
       await api.uploadNetlist(jobId, file);
       setNetlistUploaded(true);
@@ -110,6 +115,7 @@ export function App() {
     if (!jobId) return;
     setLvsRunning(true);
     setError(null);
+    setHint(null);
     try {
       await api.runLVS(jobId);
       // Poll for completion
@@ -124,6 +130,7 @@ export function App() {
             return;
           }
           if (job.status === "lvs_failed") {
+            if (job.hint) setHint(job.hint);
             throw new Error(job.error ?? "LVS failed");
           }
         }
@@ -228,10 +235,27 @@ export function App() {
           </div>
         )}
 
-        {error && (
-          <span style={{ color: "#e94560", fontSize: 13, marginLeft: "auto" }}>
-            {error}
-          </span>
+        {(error || hint) && (
+          <div style={{ marginLeft: "auto", textAlign: "right", maxWidth: "50%" }}>
+            {error && (
+              <div style={{ color: "#e94560", fontSize: 13 }}>{error}</div>
+            )}
+            {hint && (
+              <div
+                style={{
+                  color: "#f5a623",
+                  background: "#2a2a1e",
+                  border: "1px solid #f5a62344",
+                  borderRadius: 4,
+                  padding: "4px 8px",
+                  fontSize: 12,
+                  marginTop: error ? 4 : 0,
+                }}
+              >
+                Hint: {hint}
+              </div>
+            )}
+          </div>
         )}
       </header>
 
