@@ -51,6 +51,7 @@ class _SKY130Rules:
 
     # Met1 (68/20)
     met1_min_width: float = 0.140  # m1.1
+    met1_min_spacing: float = 0.140  # m1.2
     met1_enc_mcon: float = 0.030  # m1.4
     met1_enc_mcon_adj: float = 0.060  # m1.5 (one pair of adj sides)
 
@@ -172,7 +173,6 @@ class MOSFETGenerator(PCellGenerator):
 
         # Width of poly endcap for gate contact (must fit licon + enclosure)
         gc_licon_width = r.licon_size + 2 * r.licon_enc_by_poly  # 0.270
-        gc_ext = snap(r.licon_enc_by_poly + r.licon_size + r.licon_enc_by_poly)  # 0.270
         nc_ext = snap(r.poly_ext_diff)  # 0.130 (no-contact endcap)
 
         # Edge source/drain width (diff edge to first/last poly edge)
@@ -181,9 +181,13 @@ class MOSFETGenerator(PCellGenerator):
         )  # max(0.250, 0.265) = 0.265
 
         # Internal S/D width (between two adjacent poly edges)
-        internal_sd = snap(
+        # Must accommodate both licon contacts AND met1 pads with m1.2 spacing
+        licon_sd = snap(
             r.licon_to_poly_on_diff + r.licon_size + r.licon_to_poly_on_diff
         )  # 0.280
+        met1_pad_w = snap(r.mcon_size + 2 * r.met1_enc_mcon)
+        met1_sd = snap(met1_pad_w + r.met1_min_spacing)  # 0.370
+        internal_sd = snap(max(licon_sd, met1_sd))
 
         # Unified contact pitch (satisfies both licon and mcon spacing)
         contact_pitch = snap(r.licon_size + max(r.licon_spacing, r.mcon_spacing))
@@ -192,6 +196,55 @@ class MOSFETGenerator(PCellGenerator):
         # Diffusion dimensions
         diff_w = snap(2 * edge_sd + fingers * gl + (fingers - 1) * internal_sd)
         diff_h = w  # gate width
+
+        # Pre-compute vertical contact array (needed for dynamic gate contact Y)
+        n_contacts_y, contact_y_positions = self._contact_array_y(w, contact_pitch, r)
+
+        # --- Dynamic gate contact Y positioning (m1.2 clearance) ---------------
+        # S/D met1 dimensions
+        met1_sd_half_x = snap(
+            max(r.met1_min_width, r.mcon_size + 2 * r.met1_enc_mcon) / 2
+        )
+        met1_sd_enc_y = r.met1_enc_mcon_adj  # 0.060 — m1.5 adj pair
+
+        sd_met1_bot = snap(contact_y_positions[0] - r.mcon_size / 2 - met1_sd_enc_y)
+        sd_met1_top = snap(contact_y_positions[-1] + r.mcon_size / 2 + met1_sd_enc_y)
+
+        # Enforce m1.6 (min area 0.083µm²) on S/D met1 pads
+        sd_met1_w = snap(2 * met1_sd_half_x)
+        sd_met1_h = snap(sd_met1_top - sd_met1_bot)
+        min_area = 0.083
+        if sd_met1_w * sd_met1_h < min_area:
+            min_h = snap(min_area / sd_met1_w + r.grid)
+            extend = snap((min_h - sd_met1_h) / 2)
+            sd_met1_bot = snap(sd_met1_bot - extend)
+            sd_met1_top = snap(sd_met1_top + extend)
+
+        # Gate met1 pad dimensions
+        met1_gc_half = snap(
+            max(r.met1_min_width, r.mcon_size + 2 * r.met1_enc_mcon_adj) / 2
+        )
+        met1_gc_enc = r.met1_enc_mcon_adj
+        gc_m1_half_y = snap(
+            max(r.met1_min_width, r.mcon_size + 2 * met1_gc_enc) / 2
+        )
+        gc_m1_w = snap(2 * met1_gc_half)
+        gc_m1_h = snap(2 * gc_m1_half_y)
+        if gc_m1_w * gc_m1_h < min_area:
+            gc_m1_half_y = snap(min_area / gc_m1_w / 2 + r.grid)
+
+        # Push gate contacts far enough for m1.2 clearance to S/D met1
+        gc_cy_top_natural = snap(diff_h + r.licon_enc_by_poly + r.licon_size / 2)
+        min_gc_cy_top = snap(sd_met1_top + r.met1_min_spacing + gc_m1_half_y)
+        gc_cy_top = snap(max(gc_cy_top_natural, min_gc_cy_top))
+
+        gc_cy_bot_natural = snap(-(r.licon_enc_by_poly + r.licon_size / 2))
+        max_gc_cy_bot = snap(sd_met1_bot - r.met1_min_spacing - gc_m1_half_y)
+        gc_cy_bot = snap(min(gc_cy_bot_natural, max_gc_cy_bot))
+
+        # Poly extension for gate contacts (dynamic, based on actual gc positions)
+        gc_ext_top = snap(gc_cy_top + r.licon_size / 2 + r.licon_enc_by_poly - diff_h)
+        gc_ext_bot = snap(abs(gc_cy_bot) + r.licon_size / 2 + r.licon_enc_by_poly)
 
         # Create cell -----------------------------------------------------------
         cell_name = self.cell_name_format(
@@ -210,8 +263,8 @@ class MOSFETGenerator(PCellGenerator):
             gate_positions.append(gx0)
 
             # Poly Y extents
-            py_bot = -gc_ext if gate_contact in ("bottom", "both") else -nc_ext
-            py_top = diff_h + gc_ext if gate_contact in ("top", "both") else diff_h + nc_ext
+            py_bot = -gc_ext_bot if gate_contact in ("bottom", "both") else -nc_ext
+            py_top = diff_h + gc_ext_top if gate_contact in ("top", "both") else diff_h + nc_ext
 
             # Main gate body
             cell.add(gdstk.rectangle(
@@ -228,12 +281,12 @@ class MOSFETGenerator(PCellGenerator):
 
                 if gate_contact in ("top", "both"):
                     cell.add(gdstk.rectangle(
-                        (pad_x0, diff_h), (pad_x1, diff_h + gc_ext),
+                        (pad_x0, diff_h), (pad_x1, diff_h + gc_ext_top),
                         layer=LYR_POLY[0], datatype=LYR_POLY[1],
                     ))
                 if gate_contact in ("bottom", "both"):
                     cell.add(gdstk.rectangle(
-                        (pad_x0, -gc_ext), (pad_x1, 0),
+                        (pad_x0, -gc_ext_bot), (pad_x1, 0),
                         layer=LYR_POLY[0], datatype=LYR_POLY[1],
                     ))
 
@@ -257,10 +310,7 @@ class MOSFETGenerator(PCellGenerator):
 
             sd_regions.append((cx, is_source))
 
-        # Compute vertical contact array (shared by all S/D columns)
-        n_contacts_y, contact_y_positions = self._contact_array_y(w, contact_pitch, r)
-
-        # Place licon contacts for each S/D region
+        # Place licon contacts for each S/D region (contact_y_positions pre-computed above)
         for cx, _is_source in sd_regions:
             for cy in contact_y_positions:
                 self._add_contact_square(cell, cx, cy, r.licon_size, LYR_LICON)
@@ -271,15 +321,10 @@ class MOSFETGenerator(PCellGenerator):
             poly_cx = snap(gx0 + gl / 2)
             gate_contact_x_positions.append(poly_cx)
 
-            # Top gate contact
             if gate_contact in ("top", "both"):
-                gc_cy = snap(diff_h + r.licon_enc_by_poly + r.licon_size / 2)
-                self._add_contact_square(cell, poly_cx, gc_cy, r.licon_size, LYR_LICON)
-
-            # Bottom gate contact
+                self._add_contact_square(cell, poly_cx, gc_cy_top, r.licon_size, LYR_LICON)
             if gate_contact in ("bottom", "both"):
-                gc_cy = snap(-(r.licon_enc_by_poly + r.licon_size / 2))
-                self._add_contact_square(cell, poly_cx, gc_cy, r.licon_size, LYR_LICON)
+                self._add_contact_square(cell, poly_cx, gc_cy_bot, r.licon_size, LYR_LICON)
 
         # 5. Li1 routing ----------------------------------------------------------
         # Li1 strips over S/D contacts
@@ -301,25 +346,19 @@ class MOSFETGenerator(PCellGenerator):
                 max(r.li1_min_width, r.licon_size + 2 * r.li1_enc_licon) / 2
             )
             if gate_contact in ("top", "both"):
-                gc_top_cy = snap(
-                    diff_h + r.licon_enc_by_poly + r.licon_size / 2
-                )
                 cell.add(gdstk.rectangle(
                     (snap(poly_cx - gc_li1_half),
-                     snap(gc_top_cy - li1_gc_margin)),
+                     snap(gc_cy_top - li1_gc_margin)),
                     (snap(poly_cx + gc_li1_half),
-                     snap(gc_top_cy + li1_gc_margin)),
+                     snap(gc_cy_top + li1_gc_margin)),
                     layer=LYR_LI1[0], datatype=LYR_LI1[1],
                 ))
             if gate_contact in ("bottom", "both"):
-                gc_bot_cy = snap(
-                    -(r.licon_enc_by_poly + r.licon_size / 2)
-                )
                 cell.add(gdstk.rectangle(
                     (snap(poly_cx - gc_li1_half),
-                     snap(gc_bot_cy - li1_gc_margin)),
+                     snap(gc_cy_bot - li1_gc_margin)),
                     (snap(poly_cx + gc_li1_half),
-                     snap(gc_bot_cy + li1_gc_margin)),
+                     snap(gc_cy_bot + li1_gc_margin)),
                     layer=LYR_LI1[0], datatype=LYR_LI1[1],
                 ))
 
@@ -330,55 +369,45 @@ class MOSFETGenerator(PCellGenerator):
 
         for poly_cx in gate_contact_x_positions:
             if gate_contact in ("top", "both"):
-                gc_cy = snap(diff_h + r.licon_enc_by_poly + r.licon_size / 2)
-                self._add_contact_square(cell, poly_cx, gc_cy, r.mcon_size, LYR_MCON)
+                self._add_contact_square(cell, poly_cx, gc_cy_top, r.mcon_size, LYR_MCON)
             if gate_contact in ("bottom", "both"):
-                gc_cy = snap(-(r.licon_enc_by_poly + r.licon_size / 2))
-                self._add_contact_square(cell, poly_cx, gc_cy, r.mcon_size, LYR_MCON)
+                self._add_contact_square(cell, poly_cx, gc_cy_bot, r.mcon_size, LYR_MCON)
 
         # 7. Met1 pins ------------------------------------------------------------
-        met1_enc = r.met1_enc_mcon_adj  # 0.060 (conservative)
-        met1_half = snap(max(r.met1_min_width, r.mcon_size + 2 * met1_enc) / 2)
-
-        # Met1 pads over S/D mcon stacks
+        # S/D met1 uses pre-computed bounds (includes m1.6 min area enforcement)
         for cx, is_source in sd_regions:
-            m1_y0 = snap(contact_y_positions[0] - r.mcon_size / 2 - met1_enc)
-            m1_y1 = snap(contact_y_positions[-1] + r.mcon_size / 2 + met1_enc)
             cell.add(gdstk.rectangle(
-                (snap(cx - met1_half), m1_y0),
-                (snap(cx + met1_half), m1_y1),
+                (snap(cx - met1_sd_half_x), sd_met1_bot),
+                (snap(cx + met1_sd_half_x), sd_met1_top),
                 layer=LYR_MET1[0], datatype=LYR_MET1[1],
             ))
-            # Pin label
             label_text = "S" if is_source else "D"
-            label_y = snap((m1_y0 + m1_y1) / 2)
+            label_y = snap((sd_met1_bot + sd_met1_top) / 2)
             cell.add(gdstk.Label(
                 label_text, (cx, label_y),
                 layer=LYR_MET1_LBL[0], texttype=LYR_MET1_LBL[1],
             ))
 
-        # Met1 pads over gate contacts
+        # Gate met1 pads (dimensions and m1.6 pre-computed above)
         for poly_cx in gate_contact_x_positions:
             if gate_contact in ("top", "both"):
-                gc_cy = snap(diff_h + r.licon_enc_by_poly + r.licon_size / 2)
                 cell.add(gdstk.rectangle(
-                    (snap(poly_cx - met1_half), snap(gc_cy - r.mcon_size / 2 - met1_enc)),
-                    (snap(poly_cx + met1_half), snap(gc_cy + r.mcon_size / 2 + met1_enc)),
+                    (snap(poly_cx - met1_gc_half), snap(gc_cy_top - gc_m1_half_y)),
+                    (snap(poly_cx + met1_gc_half), snap(gc_cy_top + gc_m1_half_y)),
                     layer=LYR_MET1[0], datatype=LYR_MET1[1],
                 ))
                 cell.add(gdstk.Label(
-                    "G", (poly_cx, gc_cy),
+                    "G", (poly_cx, gc_cy_top),
                     layer=LYR_MET1_LBL[0], texttype=LYR_MET1_LBL[1],
                 ))
             if gate_contact in ("bottom", "both"):
-                gc_cy = snap(-(r.licon_enc_by_poly + r.licon_size / 2))
                 cell.add(gdstk.rectangle(
-                    (snap(poly_cx - met1_half), snap(gc_cy - r.mcon_size / 2 - met1_enc)),
-                    (snap(poly_cx + met1_half), snap(gc_cy + r.mcon_size / 2 + met1_enc)),
+                    (snap(poly_cx - met1_gc_half), snap(gc_cy_bot - gc_m1_half_y)),
+                    (snap(poly_cx + met1_gc_half), snap(gc_cy_bot + gc_m1_half_y)),
                     layer=LYR_MET1[0], datatype=LYR_MET1[1],
                 ))
                 cell.add(gdstk.Label(
-                    "G", (poly_cx, gc_cy),
+                    "G", (poly_cx, gc_cy_bot),
                     layer=LYR_MET1_LBL[0], texttype=LYR_MET1_LBL[1],
                 ))
 

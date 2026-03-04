@@ -1,6 +1,25 @@
 # PROGRESS-agentic-drc
 
-> Sessions 1-8 archived → `docs/archive/archive-progress-agentic-drc.md`
+> Sessions 1-9 archived → `docs/archive/archive-progress-agentic-drc.md`
+
+---
+
+## Session 12: 2026-03-04 — MOSFET met1 DRC-clean (m1.2 + m1.6)
+
+### Done
+- **MOSFET m1.2 Y-direction fix** — Dynamic gate contact Y positioning: compute S/D met1 bounds first, push gate contacts far enough for ≥0.140µm clearance. Cascaded through sections 2 (poly), 4 (licon), 5 (li1), 6 (mcon), 7 (met1). **NMOS basic: 6→0 violations. Pipeline: 11→0 violations.**
+- **MOSFET m1.6 min area fix** — S/D met1 pads extended vertically when area < 0.083µm² (affects narrow W devices like W=0.42). Extension computed before gate contact positioning so clearances account for it.
+- **All MOSFET variants DRC-clean** — PMOS 4-finger (0), NMOS basic (0), NMOS minimum (0), Pipeline 2-finger (0). LVS match=True. 595 unit + 12 E2E all passing.
+
+### Decisions
+- Gate contact Y computed dynamically from actual S/D met1 extent (not hardcoded from diff edge), ensuring m1.2 clearance regardless of W or contact count
+- m1.6 enforcement on S/D met1 done BEFORE gate contact positioning so the extended bounds are used for clearance calculation
+- `gc_ext` split into `gc_ext_top`/`gc_ext_bot` since dynamic positioning makes them asymmetric in principle (symmetric in practice for gate_contact="both")
+
+### Next
+- **MIM capacitor** — 4 violations remain (rule unknown). Need to run E2E with `-s` and examine violation categories, or read DRC report XML
+- **Stream C: Auto-fix confidence** — Promote `MinSpacingFix` to high confidence when safe. `backend/fix/strategies/spacing.py`
+- **Monte Carlo optimization** — klayout.db in-process for 10k+ geometric variants
 
 ---
 
@@ -18,10 +37,7 @@
 - m1.5 rule (0.060 on adj edges) satisfied by using met1_enc_mcon_adj in Y direction of S/D pads
 
 ### Next
-- **MOSFET m1.2 Y-direction gap** — S/D met1 top edge too close to gate contact met1 bottom edge (0.095µm gap, need ≥0.140µm). Needs dynamic gate contact Y positioning. See detailed analysis in HANDOFF.
-- **MOSFET m1.6 area** — S/D met1 pad area 0.0667µm² < 0.083µm² for narrow W. Need Y extension.
-- **MIM cap investigation** — 4 violations remain despite via2.5 margin fix. May be a different rule or the margin isn't being applied correctly.
-- **Stream C: Auto-fix confidence** — Not started. `backend/fix/strategies/spacing.py`
+- Continue with MIM cap and auto-fix confidence (see Session 12)
 
 ---
 
@@ -39,22 +55,4 @@
 - PCell DRC violations are real bugs, not test issues — need generator fixes
 
 ### Next
-- Continue MOSFET met1 fix (see Session 11)
-
----
-
-## Session 9: 2026-03-03 — Phase 5 complete: async DRC, auto-fix, LVS, PCell (Ralph)
-
-### Done
-- **3 modular PRDs created** — `prds/phase-5a-async-autofix/`, `prds/phase-5b-lvs/`, `prds/phase-5c-pcell/` (14 stories total)
-- **Ralph orchestrator execution** — All 3 PRDs queued and executed autonomously. 5a first, then 5b+5c in parallel.
-- **Phase 5a: Async DRC + Auto-Fix** (`8cc960f`..`be1ff76`) — 5 stories. Async subprocess, AutoFixRunner with confidence filtering, fix_provenance SQLite table, oscillation/regression detection, flagged fixes review endpoints.
-- **Phase 5b: LVS Checker** (`d8c3032`..`31f3989`) — 5 stories. LVSRunner, .lvsdb S-expression parser, SKY130 LVS deck, API endpoints, React mismatch viewer.
-- **Phase 5c: PCell Generator** (`3e2a620`..`af48c42`) — 4 stories. MOSFET/resistor/capacitor generators, PCell API with self-validation DRC.
-- **Lint cleanup** (`7673d11`) — Fixed 20 lint errors from Ralph's output (unused imports, import ordering, ambiguous vars).
-- **Merged to main** (`de899d2`) — All Phase 5 work merged, pushed to origin. 613 tests passing.
-
-### Decisions
-- .lvsdb format is S-expression text, not XML — Ralph discovered this and built a custom parser
-- PCell generators encode full SKY130 design rules (poly pitch, contact spacing, metal routing)
-- Modular PRDs split: 5a (5 stories, sequential), 5b+5c (5+4 stories, parallel at order 2)
+- MIM capacitor investigation + auto-fix confidence tuning

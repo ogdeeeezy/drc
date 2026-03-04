@@ -40,6 +40,7 @@ class _SKY130MIMRules:
     via2_spacing: float = 0.200  # via2.2
     via2_enc_by_met2: float = 0.040  # via2.4 (met2 enclosure of via2)
     via2_enc_by_met3: float = 0.065  # m3.4 (met3 enclosure of via2)
+    via2_enc_by_met3_adj: float = 0.085  # via2.5 (met3 enc of via2 on 2 adj edges)
 
     # Via3 (70/44) — met3 to met4
     via3_size: float = 0.200  # via3.1
@@ -233,7 +234,7 @@ class MIMCapGenerator(PCellGenerator):
             snap(-enc),
             r.via2_size,
             r.via2_spacing,
-            margin=snap(r.via2_enc_by_met3),
+            margin=snap(r.via2_enc_by_met3_adj),
         )
 
         for vx, vy in via2_positions:

@@ -59,7 +59,7 @@ met5_lbl   = input(72, 5)
 
 # -- Derived Layers ----------------------------------------------------------
 # P-well: implicit p-type substrate (everywhere n-well is absent)
-pwell = nwell.inverted
+pwell = extent.not(nwell)
 
 # N+ active (NMOS source/drain): diffusion with N+ implant
 nsd = diff & nsdm

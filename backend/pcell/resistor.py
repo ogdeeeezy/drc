@@ -162,8 +162,12 @@ class PolyResistorGenerator(PCellGenerator):
         seg_len = snap(l_um)
 
         # Contact region length (poly extension for contacts)
+        # Must account for RPM enclosure of poly body — the RPM extends
+        # rpm_enc_poly beyond the body edge, so licons must be placed
+        # outside that RPM region to avoid being clipped by licon.1 DRC rule
+        # (licon.not(prec_resistor) clips licons overlapping RPM).
         contact_len = snap(
-            r.contact_to_rpm + r.licon_size + r.licon_enc_by_poly
+            r.rpm_enc_poly + r.contact_to_rpm + r.licon_size + r.licon_enc_by_poly
         )
 
         # U-turn width (poly connecting two adjacent segments)
@@ -309,14 +313,21 @@ class PolyResistorGenerator(PCellGenerator):
             layer=LYR_PSDM[0], datatype=LYR_PSDM[1],
         ))
 
+        # Licon center offset from body edge — positioned outside RPM region
+        # RPM extends rpm_enc_poly beyond body, then contact_to_rpm gap,
+        # then licon starts. Center is at rpm_enc_poly + contact_to_rpm + licon_size/2.
+        licon_offset = snap(
+            r.rpm_enc_poly + r.contact_to_rpm + r.licon_size / 2
+        )
+
         # Head contact (PLUS terminal) — on first segment
         head_info = seg_info[0]
         if head_contact:
             if not head_info["flipped"]:
                 # Contact at bottom of first segment
-                contact_cy = snap(-contact_len / 2)
+                contact_cy = snap(-licon_offset)
             else:
-                contact_cy = snap(seg_len + contact_len / 2)
+                contact_cy = snap(seg_len + licon_offset)
             self._place_terminal_contacts(
                 cell, head_info["x0"], head_info["x1"],
                 contact_cy, w, "PLUS", r,
@@ -327,9 +338,9 @@ class PolyResistorGenerator(PCellGenerator):
         if tail_contact:
             if not tail_info["flipped"]:
                 # Contact at top of last segment
-                contact_cy = snap(seg_len + contact_len / 2)
+                contact_cy = snap(seg_len + licon_offset)
             else:
-                contact_cy = snap(-contact_len / 2)
+                contact_cy = snap(-licon_offset)
             self._place_terminal_contacts(
                 cell, tail_info["x0"], tail_info["x1"],
                 contact_cy, w, "MINUS", r,
