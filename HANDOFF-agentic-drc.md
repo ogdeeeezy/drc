@@ -5,32 +5,26 @@ Open-source DRC tool — PVS alternative for semiconductor layout verification. 
 
 ## Current State
 - **Phases 1-5**: ALL COMPLETE (33/33 stories)
-- **665 unit + 12 E2E tests passing**, 91% coverage, frontend builds clean
+- **703 unit + 12 E2E tests passing**, 94% coverage, frontend builds clean
 - **GitHub**: https://github.com/ogdeeeezy/drc — all pushed to main
 - **All PCells DRC-clean**, CI/CD enhanced with lint/test/integration/frontend jobs
 
 ## How to Run
 - Backend: `make run` (uvicorn on port 8000)
 - Frontend: `make frontend` (Vite dev on 5173, proxies /api)
-- Tests: `.venv/bin/python -m pytest tests/unit/ -q --cov=backend` (665 tests, 91%)
+- Tests: `.venv/bin/python -m pytest tests/unit/ -q --cov=backend` (703 tests, 94%)
 - E2E: `.venv/bin/python -m pytest tests/integration/test_e2e_phase5.py -v -s` (requires KLayout)
 
-## Immediate Next: Test Coverage → 95%
+## Immediate Next
+- **Branch protection** — Enable in GitHub repo settings (manual): require `lint`, `test`, `frontend` to pass
+- **Monte Carlo optimization** — klayout.db in-process for 10k+ geometric variants
+- **LLM-assisted DRC deck generator** — auto-generate rules from DRM tables
+- **More PDKs** — GF180, ASAP7 (solidify SKY130 framework first)
 
-### What's Left (fix strategy tests)
-Coverage gap is mostly geometric fix algorithms in `backend/fix/strategies/`:
-- `spacing.py` — 48 uncovered lines (62% → needs violation scenarios with edge pairs)
-- `area.py` — 33 uncovered lines (67% → min area expansion logic)
-- `width.py` — 29 uncovered lines (71% → width expansion with collision checks)
-- `short.py` — 23 uncovered lines (72% → short circuit resolution)
-
-### Key Files
-- `tests/unit/test_api_coverage.py` — new API route tests (69 tests)
-- `tests/unit/test_fix_strategies.py` — existing strategy tests to extend
-- `docs/tmp-cicd-plan.md` — full CI/CD plan + coverage analysis
-
-### Also Pending
-- **Branch protection** — Enable in GitHub repo settings (manual, not code)
+## Key Test Files
+- `tests/unit/test_fix_strategies.py` — 59 strategy tests (21 original + 38 extended coverage)
+- `tests/unit/test_api_coverage.py` — 69 API route tests
+- `docs/tmp-cicd-plan.md` — CI/CD plan + coverage analysis
 
 ## E2E Results (Current)
 ```
@@ -51,8 +45,3 @@ MIM capacitor (W=5.0 L=5.0):       0 violations
 - m1.5 rule: 0.060um on BOTH edges of ONE adjacent pair (not all 4 sides)
 - Poly resistor licon.1: RPM layer extends beyond poly body, licons overlapping RPM get clipped by DRC
 - SKY130 DRC deck via2.5: description says "m3 enclosure" but code checks m2 (`m2.enclosing(via2, 0.085)`)
-
-## What's Next (After Coverage)
-1. **Monte Carlo optimization** — klayout.db in-process for 10k+ geometric variants
-2. **LLM-assisted DRC deck generator** — auto-generate rules from DRM tables
-3. **More PDKs** — GF180, ASAP7 (last — solidify SKY130 framework first)

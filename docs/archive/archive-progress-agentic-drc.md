@@ -2,6 +2,21 @@
 
 ---
 
+## Archived: 2026-03-04 | Git: 88a7d06
+
+### Session 12: 2026-03-04 — MOSFET met1 DRC-clean (m1.2 + m1.6)
+
+#### Done
+- **MOSFET m1.2 Y-direction fix** — Dynamic gate contact Y positioning: compute S/D met1 bounds first, push gate contacts far enough for ≥0.140µm clearance. Cascaded through sections 2 (poly), 4 (licon), 5 (li1), 6 (mcon), 7 (met1). **NMOS basic: 6→0 violations. Pipeline: 11→0 violations.**
+- **MOSFET m1.6 min area fix** — S/D met1 pads extended vertically when area < 0.083µm² (affects narrow W devices like W=0.42). Extension computed before gate contact positioning so clearances account for it.
+- **All MOSFET variants DRC-clean** — PMOS 4-finger (0), NMOS basic (0), NMOS minimum (0), Pipeline 2-finger (0). LVS match=True. 595 unit + 12 E2E all passing.
+
+#### Decisions
+- Gate contact Y computed dynamically from actual S/D met1 extent (not hardcoded from diff edge), ensuring m1.2 clearance regardless of W or contact count
+- m1.6 enforcement on S/D met1 done BEFORE gate contact positioning so the extended bounds are used for clearance calculation
+
+---
+
 ## Archived: 2026-03-03 | Git: de899d2
 
 ### Session 8: 2026-03-03 — CPU throttling, GitHub repo, PDK guide, Phase 5 plan
