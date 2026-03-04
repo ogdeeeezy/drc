@@ -38,3 +38,8 @@ m1.6 (min area) enforcement extends S/D met1 pads vertically, making them taller
 
 ### Split symmetric variables when they can diverge
 `gc_ext` was a single value for poly extension above and below diffusion. With dynamic gate contact positioning, top and bottom extensions can differ (e.g., different natural vs forced positions). Splitting to `gc_ext_top`/`gc_ext_bot` prevents bugs even though they're numerically equal for `gate_contact="both"`. **When a variable represents two independent geometric quantities that happen to be equal, split it proactively.**
+
+## 2026-03-04 — Session 13: MIM Cap + Auto-Fix Confidence
+
+### DRC deck rule descriptions lie — always read the source
+SKY130's `via2.5` rule description says "min. m3 enclosure of via2 of 2 adjacent edges" but the actual code checks `m2.enclosing(via2, 0.085, projection)` — **met2**, not met3. Session 11 added met3 margins thinking that was the fix; it wasn't. The real issue was the met2 pad using 0.040µm (via2.4) instead of 0.085µm (via2.5). **When a DRC violation persists after fixing what the description says, read the `.drc` deck source to see what the rule actually checks.** Open-source PDK decks have documentation bugs just like code.
