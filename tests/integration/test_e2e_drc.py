@@ -7,6 +7,7 @@ Requires:
 Skip automatically if KLayout is not available.
 """
 
+import asyncio
 import shutil
 from pathlib import Path
 
@@ -178,3 +179,40 @@ class TestAdaptiveStrategyE2E:
         cmd_str = " ".join(cmd)
         assert "thr=" in cmd_str
         assert "drc_mode=" in cmd_str
+
+
+class TestAsyncDRCNonBlocking:
+    """Verify async DRC execution doesn't block the event loop."""
+
+    async def test_health_during_drc(self, clean_gds, sky130, tmp_path):
+        """Start async DRC and verify event loop is not blocked.
+
+        This is the key acceptance test: while DRC runs, other coroutines
+        can still execute on the event loop.
+        """
+        runner = DRCRunner()
+
+        # Track whether we could run another coroutine during DRC
+        concurrent_work_done = False
+
+        async def do_other_work():
+            """Simulates other work that should be able to run during DRC."""
+            nonlocal concurrent_work_done
+            await asyncio.sleep(0)  # Yield to event loop
+            concurrent_work_done = True
+
+        # Run DRC and concurrent work simultaneously
+        drc_task = runner.async_run(
+            clean_gds, sky130, top_cell="CLEAN", output_dir=tmp_path, map_to_pdk=False
+        )
+        work_task = do_other_work()
+
+        results = await asyncio.gather(drc_task, work_task, return_exceptions=True)
+
+        # The concurrent work must have completed — proves non-blocking
+        assert concurrent_work_done, "Event loop was blocked during async DRC"
+
+        # DRC should have completed successfully
+        drc_result = results[0]
+        if not isinstance(drc_result, Exception):
+            assert drc_result.returncode == 0

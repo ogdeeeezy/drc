@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
+import time
 from pathlib import Path
 
 _SCHEMA = """
@@ -19,7 +21,30 @@ CREATE TABLE IF NOT EXISTS jobs (
     top_cell TEXT,
     total_violations INTEGER DEFAULT 0,
     error TEXT,
-    iteration INTEGER DEFAULT 1
+    iteration INTEGER DEFAULT 1,
+    netlist_path TEXT,
+    lvs_report_path TEXT
+)
+"""
+
+_PROVENANCE_SCHEMA = """
+CREATE TABLE IF NOT EXISTS fix_provenance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id TEXT NOT NULL,
+    iteration INTEGER NOT NULL,
+    rule_id TEXT NOT NULL,
+    violation_category TEXT NOT NULL,
+    rule_type TEXT NOT NULL,
+    confidence TEXT NOT NULL,
+    action TEXT NOT NULL,
+    flag_reason TEXT,
+    before_points TEXT NOT NULL,
+    after_points TEXT NOT NULL,
+    cell_name TEXT NOT NULL,
+    gds_layer INTEGER NOT NULL,
+    gds_datatype INTEGER NOT NULL,
+    created_at REAL NOT NULL,
+    FOREIGN KEY (job_id) REFERENCES jobs(job_id)
 )
 """
 
@@ -36,6 +61,8 @@ JOB_COLUMNS = (
     "total_violations",
     "error",
     "iteration",
+    "netlist_path",
+    "lvs_report_path",
 )
 
 
@@ -52,6 +79,7 @@ class Database:
         self._local = threading.local()
         conn = self._get_conn()
         conn.execute(_SCHEMA)
+        conn.execute(_PROVENANCE_SCHEMA)
         conn.commit()
 
     def _get_conn(self) -> sqlite3.Connection:
@@ -97,6 +125,105 @@ class Database:
         """Delete a job by ID."""
         conn = self._get_conn()
         conn.execute("DELETE FROM jobs WHERE job_id = ?", (job_id,))
+        conn.commit()
+
+    def insert_provenance(
+        self,
+        job_id: str,
+        iteration: int,
+        rule_id: str,
+        violation_category: str,
+        rule_type: str,
+        confidence: str,
+        action: str,
+        before_points: list,
+        after_points: list,
+        cell_name: str,
+        gds_layer: int,
+        gds_datatype: int,
+        flag_reason: str | None = None,
+    ) -> int:
+        """Insert a fix provenance record. Returns the new row id."""
+        conn = self._get_conn()
+        cursor = conn.execute(
+            """INSERT INTO fix_provenance
+            (job_id, iteration, rule_id, violation_category, rule_type,
+             confidence, action, flag_reason, before_points, after_points,
+             cell_name, gds_layer, gds_datatype, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                job_id,
+                iteration,
+                rule_id,
+                violation_category,
+                rule_type,
+                confidence,
+                action,
+                flag_reason,
+                json.dumps(before_points),
+                json.dumps(after_points),
+                cell_name,
+                gds_layer,
+                gds_datatype,
+                time.time(),
+            ),
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+    def get_provenance(
+        self,
+        job_id: str,
+        iteration: int | None = None,
+        action: str | None = None,
+    ) -> list[dict]:
+        """Get provenance records for a job, optionally filtered by iteration or action."""
+        conn = self._get_conn()
+        query = "SELECT * FROM fix_provenance WHERE job_id = ?"
+        params: list = [job_id]
+        if iteration is not None:
+            query += " AND iteration = ?"
+            params.append(iteration)
+        if action is not None:
+            query += " AND action = ?"
+            params.append(action)
+        query += " ORDER BY iteration, created_at"
+        rows = conn.execute(query, params).fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["before_points"] = json.loads(d["before_points"])
+            d["after_points"] = json.loads(d["after_points"])
+            result.append(d)
+        return result
+
+    def get_provenance_by_ids(self, provenance_ids: list[int]) -> list[dict]:
+        """Get provenance records by their IDs."""
+        if not provenance_ids:
+            return []
+        conn = self._get_conn()
+        placeholders = ", ".join("?" for _ in provenance_ids)
+        rows = conn.execute(
+            f"SELECT * FROM fix_provenance WHERE id IN ({placeholders})",
+            provenance_ids,
+        ).fetchall()
+        result = []
+        for row in rows:
+            d = dict(row)
+            d["before_points"] = json.loads(d["before_points"])
+            d["after_points"] = json.loads(d["after_points"])
+            result.append(d)
+        return result
+
+    def update_provenance_action(
+        self, provenance_id: int, new_action: str
+    ) -> None:
+        """Update the action field on a provenance record."""
+        conn = self._get_conn()
+        conn.execute(
+            "UPDATE fix_provenance SET action = ? WHERE id = ?",
+            (new_action, provenance_id),
+        )
         conn.commit()
 
     def close(self) -> None:

@@ -138,6 +138,24 @@ export interface RecheckResult {
   categories: { category: string; description: string; count: number }[];
 }
 
+export interface LVSMismatch {
+  type: string;
+  name: string;
+  expected: string;
+  actual: string;
+  details: string;
+}
+
+export interface LVSResultsResponse {
+  job_id: string;
+  match: boolean;
+  devices_matched: number;
+  devices_mismatched: number;
+  nets_matched: number;
+  nets_mismatched: number;
+  mismatches: LVSMismatch[];
+}
+
 async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) {
@@ -207,5 +225,25 @@ export const api = {
 
   listPDKs(): Promise<{ pdks: string[] }> {
     return fetchJSON(`${BASE}/pdks`);
+  },
+
+  uploadNetlist(
+    jobId: string,
+    file: File
+  ): Promise<{ job_id: string; netlist_filename: string }> {
+    const form = new FormData();
+    form.append("file", file);
+    return fetchJSON(`${BASE}/jobs/${jobId}/lvs/upload`, {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  runLVS(jobId: string): Promise<{ job_id: string; status: string }> {
+    return fetchJSON(`${BASE}/jobs/${jobId}/lvs/run`, { method: "POST" });
+  },
+
+  getLVSResults(jobId: string): Promise<LVSResultsResponse> {
+    return fetchJSON(`${BASE}/jobs/${jobId}/lvs/results`);
   },
 };

@@ -79,6 +79,9 @@ class PDKConfig(BaseModel):
     connectivity: list[ConnectivityRule]
     fix_weights: dict[str, FixStrategyWeight]
     klayout_drc_deck: str = Field(description="Filename of KLayout DRC deck")
+    klayout_lvs_deck: str | None = Field(
+        default=None, description="Filename of KLayout LVS deck (optional)"
+    )
 
     def get_layer(self, name: str) -> GDSLayer:
         """Get layer by name, raise KeyError if not found."""

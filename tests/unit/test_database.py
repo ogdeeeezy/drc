@@ -120,6 +120,119 @@ class TestDatabase:
         assert len(results) == 5
         assert len(tmp_db.list_all()) == 5
 
+    def test_insert_and_get_provenance(self, tmp_db):
+        """Insert a provenance record and retrieve it."""
+        row_id = tmp_db.insert_provenance(
+            job_id="abc",
+            iteration=1,
+            rule_id="m1.1",
+            violation_category="m1.1",
+            rule_type="min_width",
+            confidence="high",
+            action="auto_applied",
+            before_points=[[0.0, 0.0], [0.1, 0.0], [0.1, 1.0], [0.0, 1.0]],
+            after_points=[[0.0, 0.0], [0.14, 0.0], [0.14, 1.0], [0.0, 1.0]],
+            cell_name="TOP",
+            gds_layer=68,
+            gds_datatype=20,
+        )
+        assert row_id is not None
+        records = tmp_db.get_provenance("abc")
+        assert len(records) == 1
+        r = records[0]
+        assert r["job_id"] == "abc"
+        assert r["iteration"] == 1
+        assert r["rule_id"] == "m1.1"
+        assert r["confidence"] == "high"
+        assert r["action"] == "auto_applied"
+        assert r["flag_reason"] is None
+        assert r["before_points"] == [[0.0, 0.0], [0.1, 0.0], [0.1, 1.0], [0.0, 1.0]]
+        assert r["after_points"] == [[0.0, 0.0], [0.14, 0.0], [0.14, 1.0], [0.0, 1.0]]
+        assert r["cell_name"] == "TOP"
+        assert r["gds_layer"] == 68
+
+    def test_provenance_with_flag_reason(self, tmp_db):
+        """Flagged provenance records include a reason."""
+        tmp_db.insert_provenance(
+            job_id="abc",
+            iteration=1,
+            rule_id="m1.1",
+            violation_category="m1.1",
+            rule_type="min_width",
+            confidence="low",
+            action="flagged",
+            flag_reason="low_confidence",
+            before_points=[[0.0, 0.0], [0.1, 0.0]],
+            after_points=[[0.0, 0.0], [0.14, 0.0]],
+            cell_name="TOP",
+            gds_layer=68,
+            gds_datatype=20,
+        )
+        records = tmp_db.get_provenance("abc")
+        assert records[0]["action"] == "flagged"
+        assert records[0]["flag_reason"] == "low_confidence"
+
+    def test_provenance_filter_by_iteration(self, tmp_db):
+        """get_provenance can filter by iteration."""
+        for i in range(1, 4):
+            tmp_db.insert_provenance(
+                job_id="abc",
+                iteration=i,
+                rule_id="m1.1",
+                violation_category="m1.1",
+                rule_type="min_width",
+                confidence="high",
+                action="auto_applied",
+                before_points=[[0.0, 0.0]],
+                after_points=[[0.14, 0.0]],
+                cell_name="TOP",
+                gds_layer=68,
+                gds_datatype=20,
+            )
+        all_records = tmp_db.get_provenance("abc")
+        assert len(all_records) == 3
+        iter2 = tmp_db.get_provenance("abc", iteration=2)
+        assert len(iter2) == 1
+        assert iter2[0]["iteration"] == 2
+
+    def test_provenance_filter_by_action(self, tmp_db):
+        """get_provenance can filter by action."""
+        tmp_db.insert_provenance(
+            job_id="abc", iteration=1, rule_id="m1.1",
+            violation_category="m1.1", rule_type="min_width",
+            confidence="high", action="auto_applied",
+            before_points=[], after_points=[], cell_name="TOP",
+            gds_layer=68, gds_datatype=20,
+        )
+        tmp_db.insert_provenance(
+            job_id="abc", iteration=1, rule_id="m1.1",
+            violation_category="m1.1", rule_type="min_width",
+            confidence="low", action="flagged", flag_reason="low_confidence",
+            before_points=[], after_points=[], cell_name="TOP",
+            gds_layer=68, gds_datatype=20,
+        )
+        flagged = tmp_db.get_provenance("abc", action="flagged")
+        assert len(flagged) == 1
+        assert flagged[0]["action"] == "flagged"
+
+    def test_update_provenance_action(self, tmp_db):
+        """Can update action field on a provenance record."""
+        row_id = tmp_db.insert_provenance(
+            job_id="abc", iteration=1, rule_id="m1.1",
+            violation_category="m1.1", rule_type="min_width",
+            confidence="medium", action="flagged", flag_reason="multi_layer",
+            before_points=[], after_points=[], cell_name="TOP",
+            gds_layer=68, gds_datatype=20,
+        )
+        tmp_db.update_provenance_action(row_id, "human_approved")
+        records = tmp_db.get_provenance("abc")
+        assert records[0]["action"] == "human_approved"
+
+    def test_provenance_empty_for_unknown_job(self, tmp_db):
+        """No records for a job that doesn't exist."""
+        records = tmp_db.get_provenance("nonexistent")
+        assert records == []
+
     def test_persistence(self):
         """Data survives new Database instance."""
         with tempfile.TemporaryDirectory() as d:

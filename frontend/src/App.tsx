@@ -3,6 +3,8 @@ import {
   api,
   type DRCResult,
   type LayoutData,
+  type LVSMismatch,
+  type LVSResultsResponse,
   type SuggestResult,
   type Violation,
   type ViolationsResponse,
@@ -12,8 +14,9 @@ import { LayerPanel } from "./components/Layout/LayerPanel";
 import { ViolationList } from "./components/DRC/ViolationList";
 import { ViolationOverlay } from "./components/DRC/ViolationOverlay";
 import { FixPanel } from "./components/Fix/FixPanel";
+import { MismatchList } from "./components/LVS/MismatchList";
 
-type Stage = "upload" | "layout" | "drc" | "fix";
+type Stage = "upload" | "layout" | "drc" | "fix" | "lvs";
 
 export function App() {
   const [stage, setStage] = useState<Stage>("upload");
@@ -28,8 +31,15 @@ export function App() {
   const [selectedViolation, setSelectedViolation] = useState<Violation | null>(
     null
   );
+  const [lvsResults, setLvsResults] = useState<LVSResultsResponse | null>(null);
+  const [selectedMismatch, setSelectedMismatch] = useState<LVSMismatch | null>(
+    null
+  );
+  const [netlistUploaded, setNetlistUploaded] = useState(false);
+  const [lvsRunning, setLvsRunning] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const netlistRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = useCallback(async () => {
     const file = fileRef.current?.files?.[0];
@@ -81,6 +91,52 @@ export function App() {
     }
   }, [jobId]);
 
+  const handleUploadNetlist = useCallback(async () => {
+    const file = netlistRef.current?.files?.[0];
+    if (!file || !jobId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await api.uploadNetlist(jobId, file);
+      setNetlistUploaded(true);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [jobId]);
+
+  const handleRunLVS = useCallback(async () => {
+    if (!jobId) return;
+    setLvsRunning(true);
+    setError(null);
+    try {
+      await api.runLVS(jobId);
+      // Poll for completion
+      const poll = async () => {
+        for (let i = 0; i < 120; i++) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const job = await api.getJob(jobId);
+          if (job.status === "lvs_complete") {
+            const results = await api.getLVSResults(jobId);
+            setLvsResults(results);
+            setStage("lvs");
+            return;
+          }
+          if (job.status === "lvs_failed") {
+            throw new Error(job.error ?? "LVS failed");
+          }
+        }
+        throw new Error("LVS timed out");
+      };
+      await poll();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLvsRunning(false);
+    }
+  }, [jobId]);
+
   const toggleLayer = useCallback((key: string) => {
     setHiddenLayers((prev) => {
       const next = new Set(prev);
@@ -127,9 +183,47 @@ export function App() {
               </button>
             )}
             {stage === "drc" && (
-              <button onClick={handleSuggestFixes} disabled={loading}>
-                {loading ? "Analyzing..." : "Suggest Fixes"}
-              </button>
+              <>
+                <button onClick={handleSuggestFixes} disabled={loading}>
+                  {loading ? "Analyzing..." : "Suggest Fixes"}
+                </button>
+                <span
+                  style={{
+                    width: 1,
+                    height: 20,
+                    background: "#0f3460",
+                    margin: "0 4px",
+                  }}
+                />
+                <input
+                  ref={netlistRef}
+                  type="file"
+                  accept=".spice,.sp,.cir,.net,.cdl"
+                  style={{ maxWidth: 160, fontSize: 11 }}
+                />
+                <button
+                  onClick={handleUploadNetlist}
+                  disabled={loading || !netlistRef.current?.files?.length}
+                >
+                  Upload Netlist
+                </button>
+                {netlistUploaded && (
+                  <button onClick={handleRunLVS} disabled={lvsRunning}>
+                    {lvsRunning ? "Running LVS..." : "Run LVS"}
+                  </button>
+                )}
+              </>
+            )}
+            {stage === "lvs" && (
+              <span
+                style={{
+                  fontSize: 12,
+                  color: lvsResults?.match ? "#4ecdc4" : "#e94560",
+                  fontWeight: 600,
+                }}
+              >
+                LVS: {lvsResults?.match ? "Clean" : "Mismatches found"}
+              </span>
             )}
           </div>
         )}
@@ -193,8 +287,8 @@ export function App() {
           )}
         </div>
 
-        {/* Right sidebar — violations / fixes */}
-        {(violations || fixResult) && (
+        {/* Right sidebar — violations / fixes / LVS */}
+        {(violations || fixResult || lvsResults) && (
           <div
             style={{
               width: 320,
@@ -203,7 +297,13 @@ export function App() {
               background: "#16213e",
             }}
           >
-            {fixResult && jobId ? (
+            {lvsResults ? (
+              <MismatchList
+                results={lvsResults}
+                selected={selectedMismatch}
+                onSelect={setSelectedMismatch}
+              />
+            ) : fixResult && jobId ? (
               <FixPanel jobId={jobId} result={fixResult} />
             ) : violations ? (
               <ViolationList

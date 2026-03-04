@@ -1,8 +1,9 @@
 """Tests for KLayout DRC runner — uses mocked subprocess since KLayout CLI may not be installed."""
 
+import asyncio
 import subprocess
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -499,3 +500,173 @@ class TestRunIncludesStrategy:
         # sample_gds is tiny, so should be small tier
         assert result.strategy.mode == "deep"
         assert result.strategy.threads == 4
+
+
+class TestAsyncRun:
+    """Test async DRC execution with mocked asyncio subprocess."""
+
+    @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
+    @patch("asyncio.create_subprocess_exec")
+    async def test_successful_async_run(
+        self, mock_create_subprocess, mock_avail, pdk_config, sample_gds, lyrdb_content, tmp_path
+    ):
+        """async_run completes successfully and returns DRCResult."""
+
+        async def side_effect(*cmd, **kwargs):
+            # Find the report path in the command and write a report file
+            for arg in cmd:
+                if isinstance(arg, str) and arg.startswith("report="):
+                    rpath = Path(arg.split("=", 1)[1])
+                    rpath.write_text(lyrdb_content)
+                    break
+            mock_proc = AsyncMock()
+            mock_proc.pid = 12345
+            mock_proc.returncode = 0
+            mock_proc.communicate.return_value = (b"", b"")
+            mock_proc.kill = AsyncMock()
+            mock_proc.wait = AsyncMock()
+            return mock_proc
+
+        mock_create_subprocess.side_effect = side_effect
+
+        runner = DRCRunner()
+        with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
+            deck_dir = tmp_path / "pdk" / "configs" / "test_pdk"
+            deck_dir.mkdir(parents=True, exist_ok=True)
+            (deck_dir / "test.drc").write_text("# stub")
+
+            result = await runner.async_run(
+                sample_gds, pdk_config, output_dir=tmp_path, map_to_pdk=False
+            )
+
+        assert result.returncode == 0
+        assert result.has_violations is True
+        assert result.report.total_violations == 6
+        assert result.duration_seconds >= 0
+        assert result.strategy is not None
+        assert "m1.1" in result.violation_summary
+
+    @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=False)
+    async def test_klayout_not_available_async(self, mock_avail, pdk_config, sample_gds):
+        runner = DRCRunner()
+        with pytest.raises(DRCError, match="not found"):
+            await runner.async_run(sample_gds, pdk_config)
+
+    async def test_gds_not_found_async(self, pdk_config):
+        runner = DRCRunner()
+        with pytest.raises(FileNotFoundError, match="GDSII file not found"):
+            await runner.async_run(Path("/nonexistent/file.gds"), pdk_config)
+
+    @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
+    @patch("asyncio.create_subprocess_exec")
+    async def test_klayout_failure_async(
+        self, mock_create_subprocess, mock_avail, pdk_config, sample_gds, tmp_path
+    ):
+        async def side_effect(*cmd, **kwargs):
+            mock_proc = AsyncMock()
+            mock_proc.pid = 12345
+            mock_proc.returncode = 1
+            mock_proc.communicate.return_value = (b"", b"DRC script error")
+            return mock_proc
+
+        mock_create_subprocess.side_effect = side_effect
+
+        runner = DRCRunner()
+        with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
+            deck_dir = tmp_path / "pdk" / "configs" / "test_pdk"
+            deck_dir.mkdir(parents=True, exist_ok=True)
+            (deck_dir / "test.drc").write_text("# stub")
+
+            with pytest.raises(DRCError, match="failed"):
+                await runner.async_run(sample_gds, pdk_config, output_dir=tmp_path)
+
+    @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
+    @patch("asyncio.create_subprocess_exec")
+    async def test_timeout_async(
+        self, mock_create_subprocess, mock_avail, pdk_config, sample_gds, tmp_path
+    ):
+        async def side_effect(*cmd, **kwargs):
+            mock_proc = AsyncMock()
+            mock_proc.pid = 12345
+            mock_proc.communicate.side_effect = asyncio.TimeoutError()
+            # kill() is a regular method (not a coroutine) in asyncio subprocess
+            mock_proc.kill = MagicMock()
+            return mock_proc
+
+        mock_create_subprocess.side_effect = side_effect
+
+        runner = DRCRunner()
+        with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
+            deck_dir = tmp_path / "pdk" / "configs" / "test_pdk"
+            deck_dir.mkdir(parents=True, exist_ok=True)
+            (deck_dir / "test.drc").write_text("# stub")
+
+            with pytest.raises(DRCError, match="timed out"):
+                await runner.async_run(sample_gds, pdk_config, output_dir=tmp_path)
+
+    @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
+    @patch("asyncio.create_subprocess_exec")
+    async def test_no_report_generated_async(
+        self, mock_create_subprocess, mock_avail, pdk_config, sample_gds, tmp_path
+    ):
+        async def side_effect(*cmd, **kwargs):
+            mock_proc = AsyncMock()
+            mock_proc.pid = 12345
+            mock_proc.returncode = 0
+            mock_proc.communicate.return_value = (b"", b"")
+            return mock_proc
+
+        mock_create_subprocess.side_effect = side_effect
+
+        runner = DRCRunner()
+        with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
+            deck_dir = tmp_path / "pdk" / "configs" / "test_pdk"
+            deck_dir.mkdir(parents=True, exist_ok=True)
+            (deck_dir / "test.drc").write_text("# stub")
+
+            with pytest.raises(DRCError, match="no report file"):
+                await runner.async_run(sample_gds, pdk_config, output_dir=tmp_path)
+
+    @patch("backend.core.drc_runner.DRCRunner.check_klayout_available", return_value=True)
+    @patch("asyncio.create_subprocess_exec")
+    async def test_multiple_concurrent_async_runs(
+        self, mock_create_subprocess, mock_avail, pdk_config, sample_gds, lyrdb_content, tmp_path
+    ):
+        """Multiple async DRC runs can execute concurrently without blocking each other."""
+        call_count = 0
+
+        async def side_effect(*cmd, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            for arg in cmd:
+                if isinstance(arg, str) and arg.startswith("report="):
+                    rpath = Path(arg.split("=", 1)[1])
+                    rpath.write_text(lyrdb_content)
+                    break
+            mock_proc = AsyncMock()
+            mock_proc.pid = 12345 + call_count
+            mock_proc.returncode = 0
+            mock_proc.communicate.return_value = (b"", b"")
+            return mock_proc
+
+        mock_create_subprocess.side_effect = side_effect
+
+        runner = DRCRunner()
+        with patch("backend.core.drc_runner.PDK_CONFIGS_DIR", tmp_path / "pdk" / "configs"):
+            deck_dir = tmp_path / "pdk" / "configs" / "test_pdk"
+            deck_dir.mkdir(parents=True, exist_ok=True)
+            (deck_dir / "test.drc").write_text("# stub")
+
+            # Create separate output dirs to avoid report file conflicts
+            dir1, dir2 = tmp_path / "run1", tmp_path / "run2"
+            dir1.mkdir()
+            dir2.mkdir()
+
+            results = await asyncio.gather(
+                runner.async_run(sample_gds, pdk_config, output_dir=dir1, map_to_pdk=False),
+                runner.async_run(sample_gds, pdk_config, output_dir=dir2, map_to_pdk=False),
+            )
+
+        assert len(results) == 2
+        assert all(r.returncode == 0 for r in results)
+        assert call_count == 2

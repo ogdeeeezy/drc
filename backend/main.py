@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.deps import get_job_manager
-from backend.api.routes import drc, export, fix, layout, pdk, upload
+from backend.api.routes import drc, export, fix, layout, lvs, pcell, pdk, upload
 
 app = FastAPI(
     title="Agentic DRC",
@@ -25,7 +25,9 @@ app.include_router(upload.router, prefix="/api")
 app.include_router(drc.router, prefix="/api")
 app.include_router(fix.router, prefix="/api")
 app.include_router(layout.router, prefix="/api")
+app.include_router(pcell.router, prefix="/api")
 app.include_router(pdk.router, prefix="/api")
+app.include_router(lvs.router, prefix="/api")
 app.include_router(export.router, prefix="/api")
 
 

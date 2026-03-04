@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.api.deps import get_job_manager, get_pdk_registry
 from backend.core.drc_runner import DRCError, DRCRunner
@@ -13,6 +14,7 @@ from backend.core.layout import LayoutManager
 from backend.core.spatial_index import SpatialIndex
 from backend.core.violation_parser import ViolationParser
 from backend.export.gdsii import export_fixed_gds
+from backend.fix.autofix import AutoFixRunner, _write_provenance
 from backend.fix.engine import FixEngine, FixEngineResult
 from backend.jobs.manager import JobStatus
 
@@ -29,6 +31,15 @@ def clear_fix_cache(job_id: str) -> None:
 
 class ApplyFixRequest(BaseModel):
     suggestion_indices: list[int]
+
+
+class AutoFixRequest(BaseModel):
+    confidence_threshold: Literal["high", "medium"] = "high"
+    max_iterations: int = Field(default=10, ge=1, le=50)
+
+
+class FlaggedActionRequest(BaseModel):
+    provenance_ids: list[int]
 
 
 @router.post("/{job_id}/fix/suggest")
@@ -242,6 +253,17 @@ async def apply_and_recheck(job_id: str, request: ApplyFixRequest):
     layout_mgr.load(gds_path)
     applied = _apply_deltas(layout_mgr, result, request.suggestion_indices)
 
+    # Write provenance for manually applied fixes
+    for idx in request.suggestion_indices:
+        suggestion = result.suggestions[idx]
+        _write_provenance(
+            manager,
+            job_id,
+            job.iteration,
+            suggestion,
+            action="auto_applied",
+        )
+
     # Step 2: Save versioned fixed GDS
     job_dir = manager.job_dir(job_id)
     original_stem = Path(job.filename).stem
@@ -259,7 +281,7 @@ async def apply_and_recheck(job_id: str, request: ApplyFixRequest):
     # Clear fix cache for fresh suggestions
     clear_fix_cache(job_id)
 
-    # Step 3: Re-run DRC
+    # Step 3: Re-run DRC (async — does not block event loop)
     registry = get_pdk_registry()
     try:
         pdk = registry.load(job.pdk_name)
@@ -268,7 +290,7 @@ async def apply_and_recheck(job_id: str, request: ApplyFixRequest):
 
     runner = DRCRunner()
     try:
-        drc_result = runner.run(
+        drc_result = await runner.async_run(
             gds_path=fixed_path,
             pdk=pdk,
             top_cell=job.top_cell,
@@ -365,3 +387,299 @@ def _points_match(
     return all(
         abs(p1[0] - p2[0]) < tolerance and abs(p1[1] - p2[1]) < tolerance for p1, p2 in zip(a, b)
     )
+
+
+@router.get("/{job_id}/fix/provenance")
+async def get_provenance(job_id: str, iteration: int | None = None):
+    """Get fix provenance records for a job, optionally filtered by iteration."""
+    manager = get_job_manager()
+    try:
+        manager.get(job_id)
+    except KeyError:
+        raise HTTPException(404, f"Job '{job_id}' not found")
+
+    records = manager.get_provenance(job_id, iteration=iteration)
+    return {
+        "job_id": job_id,
+        "total_records": len(records),
+        "records": [
+            {
+                "id": r["id"],
+                "iteration": r["iteration"],
+                "rule_id": r["rule_id"],
+                "violation_category": r["violation_category"],
+                "rule_type": r["rule_type"],
+                "confidence": r["confidence"],
+                "action": r["action"],
+                "flag_reason": r["flag_reason"],
+                "before_points": r["before_points"],
+                "after_points": r["after_points"],
+                "cell_name": r["cell_name"],
+                "gds_layer": r["gds_layer"],
+                "gds_datatype": r["gds_datatype"],
+                "created_at": r["created_at"],
+            }
+            for r in records
+        ],
+    }
+
+
+@router.post("/{job_id}/fix/auto")
+async def auto_fix(job_id: str, request: AutoFixRequest):
+    """Automatically loop: suggest → filter by confidence → apply → re-DRC → repeat.
+
+    Stops when DRC-clean, stalled (no applicable fixes), regression, or max iterations.
+    """
+    manager = get_job_manager()
+    try:
+        job = manager.get(job_id)
+    except KeyError:
+        raise HTTPException(404, f"Job '{job_id}' not found")
+
+    if job.gds_path is None:
+        raise HTTPException(400, "No GDSII file for this job.")
+    if job.report_path is None:
+        raise HTTPException(400, "No DRC report available. Run DRC first.")
+
+    # Load PDK
+    registry = get_pdk_registry()
+    try:
+        pdk = registry.load(job.pdk_name)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+
+    runner = AutoFixRunner(manager, pdk, job)
+    result = await runner.run(
+        confidence_threshold=request.confidence_threshold,
+        max_iterations=request.max_iterations,
+    )
+
+    return {
+        "job_id": job_id,
+        "iterations_run": result.iterations_run,
+        "final_violation_count": result.final_violation_count,
+        "fixes_applied_count": result.fixes_applied_count,
+        "fixes_flagged_count": result.fixes_flagged_count,
+        "stop_reason": result.stop_reason,
+        "oscillating_categories": result.oscillating_categories,
+        "iteration_history": [
+            {
+                "iteration": rec.iteration,
+                "total_violations": rec.total_violations,
+                "applied_count": rec.applied_count,
+                "flagged_count": rec.flagged_count,
+            }
+            for rec in result.iteration_history
+        ],
+    }
+
+
+@router.get("/{job_id}/fix/flagged")
+async def get_flagged_fixes(job_id: str):
+    """Get all flagged provenance records for a job, grouped by iteration."""
+    manager = get_job_manager()
+    try:
+        manager.get(job_id)
+    except KeyError:
+        raise HTTPException(404, f"Job '{job_id}' not found")
+
+    records = manager.get_provenance(job_id, action="flagged")
+
+    # Group by iteration
+    grouped: dict[int, list[dict]] = {}
+    for r in records:
+        it = r["iteration"]
+        if it not in grouped:
+            grouped[it] = []
+        grouped[it].append({
+            "id": r["id"],
+            "iteration": r["iteration"],
+            "violation_category": r["violation_category"],
+            "rule_type": r["rule_type"],
+            "confidence": r["confidence"],
+            "flag_reason": r["flag_reason"],
+            "before_points": r["before_points"],
+            "after_points": r["after_points"],
+            "cell_name": r["cell_name"],
+            "gds_layer": r["gds_layer"],
+            "gds_datatype": r["gds_datatype"],
+            "description": f"{r['rule_type']} violation ({r['violation_category']})",
+            "created_at": r["created_at"],
+        })
+
+    return {
+        "job_id": job_id,
+        "total_flagged": len(records),
+        "iterations": [
+            {"iteration": it, "flagged": items}
+            for it, items in sorted(grouped.items())
+        ],
+    }
+
+
+@router.post("/{job_id}/fix/flagged/approve")
+async def approve_flagged_fixes(job_id: str, request: FlaggedActionRequest):
+    """Approve specific flagged fixes — applies them to the GDS and re-runs DRC."""
+    manager = get_job_manager()
+    try:
+        job = manager.get(job_id)
+    except KeyError:
+        raise HTTPException(404, f"Job '{job_id}' not found")
+
+    if job.gds_path is None:
+        raise HTTPException(400, "No GDSII file for this job.")
+
+    # Fetch provenance records by ID
+    records = manager.get_provenance_by_ids(request.provenance_ids)
+    if len(records) != len(request.provenance_ids):
+        found_ids = {r["id"] for r in records}
+        missing = [pid for pid in request.provenance_ids if pid not in found_ids]
+        raise HTTPException(404, f"Provenance records not found: {missing}")
+
+    # Validate all are flagged and belong to this job
+    for r in records:
+        if r["job_id"] != job_id:
+            raise HTTPException(
+                400, f"Provenance record {r['id']} does not belong to job '{job_id}'"
+            )
+        if r["action"] != "flagged":
+            raise HTTPException(
+                400, f"Provenance record {r['id']} is not flagged (action='{r['action']}')"
+            )
+
+    # Load layout and apply deltas from provenance records
+    gds_path = Path(job.gds_path)
+    if not gds_path.exists():
+        raise HTTPException(404, "GDSII file not found on disk")
+
+    layout_mgr = LayoutManager()
+    layout_mgr.load(gds_path)
+
+    applied = 0
+    for r in records:
+        before_pts = [tuple(p) for p in r["before_points"]]
+        after_pts = [tuple(p) for p in r["after_points"]]
+        is_removal = len(after_pts) == 0
+        is_addition = len(before_pts) == 0
+
+        try:
+            cell = layout_mgr.get_cell(r["cell_name"])
+            matched = False
+            for i, poly in enumerate(cell.polygons):
+                if poly.layer == r["gds_layer"] and poly.datatype == r["gds_datatype"]:
+                    poly_pts = [(float(p[0]), float(p[1])) for p in poly.points]
+                    if _points_match(poly_pts, before_pts):
+                        if is_removal:
+                            layout_mgr.remove_polygon(r["cell_name"], i)
+                        else:
+                            layout_mgr.replace_polygon(r["cell_name"], i, after_pts)
+                        applied += 1
+                        matched = True
+                        break
+
+            if not matched and is_addition:
+                layout_mgr.add_polygon(
+                    r["cell_name"], after_pts, r["gds_layer"], r["gds_datatype"]
+                )
+                applied += 1
+        except (KeyError, IndexError):
+            continue
+
+    # Export versioned fixed GDS
+    job_dir = manager.job_dir(job_id)
+    original_stem = Path(job.filename).stem
+    fixed_path = export_fixed_gds(layout_mgr, job_dir, original_stem, job.iteration)
+
+    # Increment iteration
+    new_iteration = job.iteration + 1
+    manager.update_status(
+        job_id,
+        JobStatus.running_drc,
+        gds_path=str(fixed_path),
+        iteration=new_iteration,
+    )
+
+    # Update provenance records to human_approved
+    for r in records:
+        manager.update_provenance_action(r["id"], "human_approved")
+
+    # Re-run DRC
+    registry = get_pdk_registry()
+    try:
+        pdk = registry.load(job.pdk_name)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+
+    runner = DRCRunner()
+    try:
+        drc_result = await runner.async_run(
+            gds_path=fixed_path,
+            pdk=pdk,
+            top_cell=job.top_cell,
+            output_dir=job_dir,
+        )
+    except DRCError as e:
+        manager.update_status(job_id, JobStatus.drc_failed, error=str(e))
+        raise HTTPException(500, f"Re-DRC failed: {e}")
+    except FileNotFoundError as e:
+        manager.update_status(job_id, JobStatus.drc_failed, error=str(e))
+        raise HTTPException(404, str(e))
+
+    # Update with DRC results
+    new_status = (
+        JobStatus.complete if drc_result.report.total_violations == 0 else JobStatus.drc_complete
+    )
+    manager.update_status(
+        job_id,
+        new_status,
+        report_path=str(drc_result.report_path),
+        top_cell=drc_result.report.top_cell,
+        total_violations=drc_result.report.total_violations,
+    )
+
+    return {
+        "job_id": job_id,
+        "approved_count": len(request.provenance_ids),
+        "applied_count": applied,
+        "iteration": new_iteration,
+        "status": new_status.value,
+        "total_violations": drc_result.report.total_violations,
+        "is_clean": drc_result.report.total_violations == 0,
+    }
+
+
+@router.post("/{job_id}/fix/flagged/reject")
+async def reject_flagged_fixes(job_id: str, request: FlaggedActionRequest):
+    """Reject specific flagged fixes — marks them as rejected in provenance."""
+    manager = get_job_manager()
+    try:
+        manager.get(job_id)
+    except KeyError:
+        raise HTTPException(404, f"Job '{job_id}' not found")
+
+    # Fetch provenance records by ID
+    records = manager.get_provenance_by_ids(request.provenance_ids)
+    if len(records) != len(request.provenance_ids):
+        found_ids = {r["id"] for r in records}
+        missing = [pid for pid in request.provenance_ids if pid not in found_ids]
+        raise HTTPException(404, f"Provenance records not found: {missing}")
+
+    # Validate all are flagged and belong to this job
+    for r in records:
+        if r["job_id"] != job_id:
+            raise HTTPException(
+                400, f"Provenance record {r['id']} does not belong to job '{job_id}'"
+            )
+        if r["action"] != "flagged":
+            raise HTTPException(
+                400, f"Provenance record {r['id']} is not flagged (action='{r['action']}')"
+            )
+
+    # Update provenance records to rejected
+    for r in records:
+        manager.update_provenance_action(r["id"], "rejected")
+
+    return {
+        "job_id": job_id,
+        "rejected_count": len(request.provenance_ids),
+    }

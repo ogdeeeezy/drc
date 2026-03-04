@@ -4,6 +4,7 @@
   "process_node_nm": 130,
   "grid_um": 0.005,
   "klayout_drc_deck": "sky130A_mr.drc",
+  "klayout_lvs_deck": "sky130A.lvs",
   "layers": {
     "nwell": {
       "gds_layer": 64,
