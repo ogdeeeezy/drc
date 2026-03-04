@@ -185,3 +185,23 @@
 - .lvsdb format is S-expression text, not XML — Ralph discovered this and built a custom parser
 - PCell generators encode full SKY130 design rules (poly pitch, contact spacing, metal routing)
 - Modular PRDs split: 5a (5 stories, sequential), 5b+5c (5+4 stories, parallel at order 2)
+
+---
+
+## Archived: 2026-03-04 | Git: ebaa65a
+
+## Session 10: 2026-03-03 — E2E validation + issue triage
+
+### Done
+- **E2E integration test suite** — `tests/integration/test_e2e_phase5.py` (12 tests). PCell→DRC, auto-fix loop, LVS runner, full pipeline. All 12 passing, 625 total tests.
+- **Exact DRC violations captured** per PCell type against real KLayout + SKY130 deck
+- **Triage plan created** — 3 streams: LVS deck fix, PCell generator fixes, auto-fix confidence tuning. Plan at `~/.claude/plans/idempotent-sniffing-beaver.md`
+- **Priority reorder** — More PDKs moved to last; solidify SKY130 framework first
+
+### Decisions
+- E2E tests skip gracefully if KLayout not installed (CI-friendly)
+- Auto-fix test uses `confidence_threshold="medium"` — "high" flags all spacing fixes causing stall (by design)
+- PCell DRC violations are real bugs, not test issues — need generator fixes
+
+### Next
+- MIM capacitor investigation + auto-fix confidence tuning

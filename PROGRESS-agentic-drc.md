@@ -1,6 +1,6 @@
 # PROGRESS-agentic-drc
 
-> Sessions 1-9 archived → `docs/archive/archive-progress-agentic-drc.md`
+> Sessions 1-10 archived → `docs/archive/archive-progress-agentic-drc.md`
 
 ---
 
@@ -8,16 +8,17 @@
 
 ### Done
 - **MIM capacitor DRC-clean** (`b63629b`) — Root cause: via2.5 in SKY130 DRC deck checks `m2.enclosing(via2, 0.085)` (met2, not met3 as description says). Met2 pad margin was 0.040 (via2.4) instead of 0.085 (via2.5). Added `via2_enc_by_met2_adj` constant. **All PCells now 0 violations.**
-- **Stream C: MinSpacingFix confidence promotion** — Move fixes promoted to `FixConfidence.high` when: (1) deficit <= rule value, (2) no same-layer polygon collision within min_spacing of moved position. Collision check uses `SpatialIndex.query_nearby()`. Shrink fixes stay at medium. 596 unit + 12 E2E passing.
+- **Stream C: MinSpacingFix confidence promotion** (`ebaa65a`) — Move fixes promoted to `FixConfidence.high` when: (1) deficit <= rule value, (2) no same-layer polygon collision within min_spacing of moved position. Collision check uses `SpatialIndex.query_nearby()`. Shrink fixes stay at medium. 596 unit + 12 E2E passing.
+- **CI/CD plan drafted** — `docs/tmp-cicd-plan.md` with full enhancement plan for `.github/workflows/ci.yml`. Was interrupted before implementation.
 
 ### Decisions
 - via2.5 DRC deck bug: description says "m3 enclosure" but code checks m2. Documented in HANDOFF gotchas.
 - Shrink fixes intentionally kept at medium confidence — shrinking polygons risks width/area violations
 
 ### Next
+- **CI/CD implementation** — Enhance `.github/workflows/ci.yml` per plan in `docs/tmp-cicd-plan.md`
 - Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
 - LLM-assisted DRC deck generator — auto-generate rules from DRM tables
-- CI/CD — GitHub Actions for test + lint on PR
 
 ---
 
@@ -55,21 +56,3 @@
 
 ### Next
 - Continue with MIM cap and auto-fix confidence (see Session 12)
-
----
-
-## Session 10: 2026-03-03 — E2E validation + issue triage
-
-### Done
-- **E2E integration test suite** — `tests/integration/test_e2e_phase5.py` (12 tests). PCell→DRC, auto-fix loop, LVS runner, full pipeline. All 12 passing, 625 total tests.
-- **Exact DRC violations captured** per PCell type against real KLayout + SKY130 deck
-- **Triage plan created** — 3 streams: LVS deck fix, PCell generator fixes, auto-fix confidence tuning. Plan at `~/.claude/plans/idempotent-sniffing-beaver.md`
-- **Priority reorder** — More PDKs moved to last; solidify SKY130 framework first
-
-### Decisions
-- E2E tests skip gracefully if KLayout not installed (CI-friendly)
-- Auto-fix test uses `confidence_threshold="medium"` — "high" flags all spacing fixes causing stall (by design)
-- PCell DRC violations are real bugs, not test issues — need generator fixes
-
-### Next
-- MIM capacitor investigation + auto-fix confidence tuning
