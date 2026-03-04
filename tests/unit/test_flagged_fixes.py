@@ -6,10 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.fix.fix_models import FixConfidence, FixSuggestion, PolygonDelta
-from backend.jobs.database import Database
 from backend.jobs.manager import JobManager, JobStatus
-
 
 # ── Fixtures ──────────────────────────────────────────────
 
@@ -139,10 +136,9 @@ class TestGetFlaggedEndpoint:
         """Flagged records grouped by iteration, auto_applied excluded."""
         from fastapi.testclient import TestClient
 
+        import backend.config as cfg
         from backend.api import deps
         from backend.main import app
-
-        import backend.config as cfg
 
         deps.reset_deps()
         original_jobs = cfg.JOBS_DIR
@@ -190,10 +186,9 @@ class TestGetFlaggedEndpoint:
         """404 for unknown job."""
         from fastapi.testclient import TestClient
 
+        import backend.config as cfg
         from backend.api import deps
         from backend.main import app
-
-        import backend.config as cfg
 
         deps.reset_deps()
         original_jobs = cfg.JOBS_DIR
@@ -237,10 +232,9 @@ class TestRejectFlaggedEndpoint:
         """POST /fix/flagged/reject marks records as rejected."""
         from fastapi.testclient import TestClient
 
+        import backend.config as cfg
         from backend.api import deps
         from backend.main import app
-
-        import backend.config as cfg
 
         deps.reset_deps()
         original_jobs = cfg.JOBS_DIR
@@ -274,10 +268,9 @@ class TestRejectFlaggedEndpoint:
         """404 if any provenance IDs not found."""
         from fastapi.testclient import TestClient
 
+        import backend.config as cfg
         from backend.api import deps
         from backend.main import app
-
-        import backend.config as cfg
 
         deps.reset_deps()
         original_jobs = cfg.JOBS_DIR
@@ -303,10 +296,9 @@ class TestRejectFlaggedEndpoint:
         """400 if record is not flagged (e.g., auto_applied)."""
         from fastapi.testclient import TestClient
 
+        import backend.config as cfg
         from backend.api import deps
         from backend.main import app
-
-        import backend.config as cfg
 
         deps.reset_deps()
         original_jobs = cfg.JOBS_DIR
@@ -348,10 +340,9 @@ class TestApproveFlaggedEndpoint:
         """POST /fix/flagged/approve applies deltas, re-runs DRC, updates provenance."""
         from fastapi.testclient import TestClient
 
+        import backend.config as cfg
         from backend.api import deps
         from backend.main import app
-
-        import backend.config as cfg
 
         deps.reset_deps()
         original_jobs = cfg.JOBS_DIR
@@ -426,10 +417,9 @@ class TestApproveFlaggedEndpoint:
         """404 if any provenance IDs not found."""
         from fastapi.testclient import TestClient
 
+        import backend.config as cfg
         from backend.api import deps
         from backend.main import app
-
-        import backend.config as cfg
 
         deps.reset_deps()
         original_jobs = cfg.JOBS_DIR
@@ -455,10 +445,9 @@ class TestApproveFlaggedEndpoint:
         """400 if record is not flagged."""
         from fastapi.testclient import TestClient
 
+        import backend.config as cfg
         from backend.api import deps
         from backend.main import app
-
-        import backend.config as cfg
 
         deps.reset_deps()
         original_jobs = cfg.JOBS_DIR
@@ -488,10 +477,9 @@ class TestApproveFlaggedEndpoint:
         """400 if provenance record belongs to a different job."""
         from fastapi.testclient import TestClient
 
+        import backend.config as cfg
         from backend.api import deps
         from backend.main import app
-
-        import backend.config as cfg
 
         deps.reset_deps()
         original_jobs = cfg.JOBS_DIR

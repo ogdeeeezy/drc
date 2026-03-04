@@ -706,7 +706,7 @@ class TestAutoFixOscillation:
             # But we need the *initial* parse to return the real report (3 met1.1 violations).
             # The initial parse happens before the loop. Then DRC returns clean, but
             # the loop stops on drc_clean. To test oscillation we need 3+ iterations.
-            # Let's simulate: initial=3, iter1 DRC=2 (still has violations), iter2 DRC=0, iter3 DRC=2 (oscillation)
+            # Simulate: initial=3, iter1 DRC=2, iter2 DRC=0, iter3 DRC=2 (oscillation)
 
             # Re-approach: make DRC always return violations that oscillate
             report_2v = job_dir / "drc_2v.lyrdb"

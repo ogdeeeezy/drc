@@ -2,7 +2,6 @@
 
 import json
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -47,7 +46,7 @@ class TestLVSDeckFile:
         content = LVS_DECK_PATH.read_text()
         # Check for 'deep' keyword (not inside a comment)
         lines = content.split("\n")
-        deep_lines = [l.strip() for l in lines if l.strip() == "deep"]
+        deep_lines = [ln.strip() for ln in lines if ln.strip() == "deep"]
         assert len(deep_lines) >= 1, "Missing 'deep' mode for hierarchical extraction"
 
     def test_deck_extracts_nmos(self):
@@ -103,7 +102,7 @@ class TestLVSDeckFile:
     def test_deck_has_compare(self):
         content = LVS_DECK_PATH.read_text()
         lines = content.split("\n")
-        compare_lines = [l.strip() for l in lines if l.strip() == "compare"]
+        compare_lines = [ln.strip() for ln in lines if ln.strip() == "compare"]
         assert len(compare_lines) >= 1, "Missing 'compare' directive"
 
     def test_deck_has_netlist_simplify(self):

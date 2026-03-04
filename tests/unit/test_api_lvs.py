@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.api import deps
-from backend.core.lvs_models import LVSMismatch, LVSMismatchType, LVSReport
+from backend.core.lvs_models import LVSMismatchType
 from backend.core.lvs_runner import LVSResult
 from backend.jobs.manager import JobStatus
 from backend.main import app
