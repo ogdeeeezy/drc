@@ -17,9 +17,11 @@
 - Implant gap = 0.130 µm between nsdm/psdm edges (matches difftap.10)
 - PMOS nwell extended leftward to enclose ntap
 
+- **Deploy plan created** — VPS recon: Ubuntu 24.04, Docker 29.2, Caddy on 80/443, `sky130drc.duckdns.org` DNS resolves. Plan at `docs/tmp-deploy-plan.md`.
+
 ### Next
+- **Deploy to VPS** — Execute `docs/tmp-deploy-plan.md`: fix static serving + CORS in main.py, add .dockerignore, add feedback button, deploy via docker compose, add Caddy entry
 - **Multi-finger LVS** — S/D pads disconnected for 2+ fingers (need met1 bus connecting shared terminals)
-- **Revert T-pad offset in mosfet.py** — harmless but unnecessary (lines ~185-200)
 - Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
 - LLM-assisted DRC deck generator
 
