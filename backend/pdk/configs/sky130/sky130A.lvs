@@ -157,5 +157,9 @@ connect(met5, met5_lbl)
 # Simplify extracted netlist: combine parallel devices, remove floating nets
 netlist.simplify
 
+# Map extracted device classes to SPICE model names
+same_device_classes("NMOS", "SKY130_FD_PR__NFET_01V8")
+same_device_classes("PMOS", "SKY130_FD_PR__PFET_01V8")
+
 # Compare extracted netlist against reference schematic
 compare

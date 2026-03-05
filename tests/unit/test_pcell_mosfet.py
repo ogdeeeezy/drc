@@ -119,7 +119,7 @@ class TestSingleFingerNMOS:
         psdm = _polys_on_layer(result.cell, *LYR_PSDM)
         nwell = _polys_on_layer(result.cell, *LYR_NWELL)
         assert len(nsdm) == 1, "NMOS should have nsdm implant"
-        assert len(psdm) == 0, "NMOS should not have psdm"
+        assert len(psdm) == 1, "NMOS should have psdm for substrate tap"
         assert len(nwell) == 0, "NMOS should not have nwell"
 
     def test_has_contacts(self, result):
@@ -194,7 +194,7 @@ class TestMultiFingerPMOS:
         psdm = _polys_on_layer(result.cell, *LYR_PSDM)
         nsdm = _polys_on_layer(result.cell, *LYR_NSDM)
         assert len(psdm) == 1, "PMOS should have psdm"
-        assert len(nsdm) == 0, "PMOS should not have nsdm"
+        assert len(nsdm) == 1, "PMOS should have nsdm for well tap"
 
     def test_four_poly_gates(self, result):
         """4 fingers → at least 4 poly rectangles (more with T-gate pads)."""

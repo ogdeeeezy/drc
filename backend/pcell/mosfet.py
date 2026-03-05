@@ -77,6 +77,7 @@ LYR_MCON = (67, 44)
 LYR_MET1 = (68, 20)
 LYR_MET1_PIN = (68, 16)  # met1 pin purpose
 LYR_MET1_LBL = (68, 5)  # met1 label purpose
+LYR_TAP = (65, 44)       # Well/substrate tap (body contacts)
 
 
 class MOSFETGenerator(PCellGenerator):
@@ -414,12 +415,6 @@ class MOSFETGenerator(PCellGenerator):
                     layer=LYR_MET1_LBL[0], texttype=LYR_MET1_LBL[1],
                 ))
 
-        # Body label at substrate (bottom-left of diff)
-        cell.add(gdstk.Label(
-            "B", (0, 0),
-            layer=LYR_MET1_LBL[0], texttype=LYR_MET1_LBL[1],
-        ))
-
         # 8. Implant layers -------------------------------------------------------
         imp_enc = snap(r.implant_enc_diff)
         imp_x0 = snap(-imp_enc)
@@ -438,13 +433,26 @@ class MOSFETGenerator(PCellGenerator):
                 layer=LYR_PSDM[0], datatype=LYR_PSDM[1],
             ))
 
-        # 9. Nwell (PMOS only) ----------------------------------------------------
+        # 9a. Substrate tap position (computed before nwell for PMOS extension)
+        # Tap connects body terminal to met1 via: tap → licon → li1 → mcon → met1
+        # Placed left of diffusion with implant-to-implant clearance
+        implant_gap = snap(0.130)  # nsdm/psdm edge spacing
+        tap_w = snap(r.licon_size + 2 * r.licon_enc_by_diff)  # 0.250
+        tap_right_x = snap(-(imp_enc + implant_gap + imp_enc))
+        tap_left_x = snap(tap_right_x - tap_w)
+        tap_cx = snap((tap_left_x + tap_right_x) / 2)
+        tap_cy = snap(diff_h / 2)
+        tap_half = snap(tap_w / 2)
+        tap_top_y = snap(tap_cy + tap_half)
+        tap_bot_y = snap(tap_cy - tap_half)
+
+        # 9b. Nwell (PMOS only) ---------------------------------------------------
         if device_type == "pmos":
             nw_enc = snap(r.nwell_enc_diff)
-            nw_x0 = snap(-nw_enc)
+            nw_x0 = snap(min(-nw_enc, tap_left_x - nw_enc))
             nw_x1 = snap(diff_w + nw_enc)
-            nw_y0 = snap(-nw_enc)
-            nw_y1 = snap(diff_h + nw_enc)
+            nw_y0 = snap(min(-nw_enc, tap_bot_y - nw_enc))
+            nw_y1 = snap(max(diff_h + nw_enc, tap_top_y + nw_enc))
             # Enforce nwell min width
             if (nw_x1 - nw_x0) < r.nwell_min_width:
                 extra = snap((r.nwell_min_width - (nw_x1 - nw_x0)) / 2)
@@ -458,6 +466,48 @@ class MOSFETGenerator(PCellGenerator):
                 (nw_x0, nw_y0), (nw_x1, nw_y1),
                 layer=LYR_NWELL[0], datatype=LYR_NWELL[1],
             ))
+
+        # 10. Substrate tap (body terminal) ----------------------------------------
+        # NMOS: ptap (65/44 + 94/20) connects to p-substrate
+        # PMOS: ntap (65/44 + 93/44) connects to n-well
+        cell.add(gdstk.rectangle(
+            (tap_left_x, tap_bot_y), (tap_right_x, tap_top_y),
+            layer=LYR_TAP[0], datatype=LYR_TAP[1],
+        ))
+        tap_imp_lyr = LYR_PSDM if device_type == "nmos" else LYR_NSDM
+        cell.add(gdstk.rectangle(
+            (snap(tap_left_x - imp_enc), snap(tap_bot_y - imp_enc)),
+            (snap(tap_right_x + imp_enc), snap(tap_top_y + imp_enc)),
+            layer=tap_imp_lyr[0], datatype=tap_imp_lyr[1],
+        ))
+
+        # Contact stack on tap: licon → li1 → mcon → met1
+        self._add_contact_square(cell, tap_cx, tap_cy, r.licon_size, LYR_LICON)
+        li1_tap_half = snap(
+            max(r.li1_min_width, r.licon_size + 2 * r.li1_enc_licon) / 2
+        )
+        cell.add(gdstk.rectangle(
+            (snap(tap_cx - li1_tap_half), snap(tap_cy - li1_tap_half)),
+            (snap(tap_cx + li1_tap_half), snap(tap_cy + li1_tap_half)),
+            layer=LYR_LI1[0], datatype=LYR_LI1[1],
+        ))
+        self._add_contact_square(cell, tap_cx, tap_cy, r.mcon_size, LYR_MCON)
+
+        met1_tap_half = snap(
+            max(r.met1_min_width, r.mcon_size + 2 * r.met1_enc_mcon_adj) / 2
+        )
+        tap_m1_w = snap(2 * met1_tap_half)
+        if tap_m1_w * tap_m1_w < min_area:
+            met1_tap_half = snap((min_area / tap_m1_w) / 2 + r.grid)
+        cell.add(gdstk.rectangle(
+            (snap(tap_cx - met1_tap_half), snap(tap_cy - met1_tap_half)),
+            (snap(tap_cx + met1_tap_half), snap(tap_cy + met1_tap_half)),
+            layer=LYR_MET1[0], datatype=LYR_MET1[1],
+        ))
+        cell.add(gdstk.Label(
+            "B", (tap_cx, tap_cy),
+            layer=LYR_MET1_LBL[0], texttype=LYR_MET1_LBL[1],
+        ))
 
         # Build result -----------------------------------------------------------
         return PCellResult(
