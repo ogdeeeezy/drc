@@ -1,22 +1,23 @@
 # PROGRESS-agentic-drc
 
-> Sessions 1-16 archived → `docs/archive/archive-progress-agentic-drc.md`
+> Sessions 1-17 archived → `docs/archive/archive-progress-agentic-drc.md`
 
 ---
 
-## Session 20: 2026-03-05 — Deployed to VPS
+## Session 20: 2026-03-05 — Deployed to VPS + production bugfixes
 
 ### Done
 - **Deployed to production** (`614a181`) — Live at https://sky130drc.duckdns.org with auto-SSL via Caddy
-- **Static file serving** — FastAPI serves `frontend/dist` at `/` with SPA catch-all for client-side routing
-- **CORS updated** — Added `https://sky130drc.duckdns.org` to allowed origins
-- **.dockerignore added** — Excludes .venv, node_modules, tests, .git from Docker context
-- **Feedback button** — Fixed-position "Give Feedback" link → GitHub Issues in bottom-right corner
+- **Static file serving + CORS** — FastAPI serves `frontend/dist` at `/` with SPA catch-all, production domain in CORS
+- **.dockerignore + feedback button** — Docker context trimmed, "Give Feedback" → GitHub Issues
 - **Docker healthcheck fixed** — Replaced `curl` with Python `urllib` (curl not in python:3.12-slim)
+- **DRC polling fix** (`ac8558e`) — Frontend was calling getViolations immediately after async runDRC. Added 2s polling loop matching LVS pattern.
+- **Viewport clamping** (`2b2edd9`) — Pan clamped so 20% of viewport always overlaps layout bbox. Zoom bounded 0.1x–100x of fit. Double-click resets view.
 
 ### Decisions
-- Static files mounted as `/assets` + SPA catch-all at `/{path:path}` (not full StaticFiles at `/` which would conflict with API routes)
-- Caddy handles SSL termination — no cert management needed in app
+- Static files mounted as `/assets` + SPA catch-all at `/{path:path}` (avoids conflict with `/api` routes)
+- Caddy handles SSL termination — no cert management in app
+- Redeploy: `ssh root@104.156.154.153 "cd /opt/drc && git pull && docker compose up -d --build"`
 
 ### Next
 - **Multi-finger LVS** — S/D met1 pads disconnected for 2+ fingers (need met1 bus)
@@ -30,21 +31,15 @@
 ### Done
 - **LVS E2E flow verified** — Generate PCell → upload GDS → DRC (0 violations) → upload SPICE netlist → run LVS → **match** (1 device, 4 nets). Both NMOS and PMOS single-finger pass clean.
 - **Substrate taps added to PCells** — ptap for NMOS, ntap for PMOS. Full contact stack (tap → licon → li1 → mcon → met1 with "B" label). Placed left of diff with 0.130 µm implant clearance.
-- **LVS deck device class mapping** — Added `same_device_classes("NMOS", "SKY130_FD_PR__NFET_01V8")` and PMOS equivalent. Maps extraction names to SPICE model names.
+- **LVS deck device class mapping** — Added `same_device_classes("NMOS", "SKY130_FD_PR__NFET_01V8")` and PMOS equivalent.
 - **Tests updated** — Implant assertions updated for tap presence. 730 tests, 95% coverage.
 
 ### Decisions
 - Substrate tap placed LEFT of diffusion (not below) to avoid gate contact conflicts
 - Implant gap = 0.130 µm between nsdm/psdm edges (matches difftap.10)
-- PMOS nwell extended leftward to enclose ntap
-
-- **Deploy plan created** — VPS recon: Ubuntu 24.04, Docker 29.2, Caddy on 80/443, `sky130drc.duckdns.org` DNS resolves. Plan at `docs/tmp-deploy-plan.md`.
 
 ### Next
-- **Deploy to VPS** — Execute `docs/tmp-deploy-plan.md`: fix static serving + CORS in main.py, add .dockerignore, add feedback button, deploy via docker compose, add Caddy entry
-- **Multi-finger LVS** — S/D pads disconnected for 2+ fingers (need met1 bus connecting shared terminals)
-- Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
-- LLM-assisted DRC deck generator
+- Deploy to VPS (done in Session 20)
 
 ---
 
@@ -52,33 +47,12 @@
 
 ### Done
 - **PCell generation E2E** — Tested all 5 device types via API: NMOS, PMOS, poly resistor, MIM capacitor, minimum NMOS. All DRC-clean (0 violations).
-- **SQLite migration fix** — Added migration for `netlist_path` and `lvs_report_path` columns in `database.py` (was only migrating `hint`).
-- **LVS deck root cause found** — KLayout mos4 extraction requires SD layer pre-split at gate edges. Continuous diff rectangle fails with "Expected two polygons on diff interacting with one gate shape." Tested 6 hypotheses to isolate.
-- **sky130A.lvs rewritten** — Pre-split SD (`nsd = (diff & nsdm) - gate_poly`), clip gate to active area (`gate_in_active = gate_poly & active`), bridge connectivity (`connect(gate_in_active, gate_poly)`). Device extracts with correct L=0.15, W=0.42.
+- **SQLite migration fix** — Added migration for `netlist_path` and `lvs_report_path` columns in `database.py`.
+- **LVS deck root cause found** — KLayout mos4 extraction requires SD layer pre-split at gate edges.
+- **sky130A.lvs rewritten** — Pre-split SD, clip gate to active area, bridge connectivity. Device extracts with correct L=0.15, W=0.42.
 
 ### Decisions
 - Gate clipped to active area for extraction (not full poly) — prevents endcap area from inflating L computation
-- `connect(gate_in_active, gate_poly)` bridges extraction layer to routing layer for connectivity
 
 ### Next
 - Test full LVS flow end-to-end (done in Session 19)
-
----
-
-## Session 17: 2026-03-04 — Error hints implementation + branch protection
-
-### Done
-- **Error hints implemented** (`affd54d`) — Centralized `error_hints.py` with 14 regex→hint rules, `hint` field on Job model + DB schema (with ALTER TABLE migration), route wiring in drc.py/lvs.py, amber hint box UI in frontend. 730 tests, 95% coverage.
-- **OSError runner tests** — 4 new tests each for DRC/LVS runners covering exec format error and permission denied paths (sync + async).
-- **Error hints test suite** — 19 tests covering all regex patterns, edge cases, first-match-wins behavior.
-- **Branch protection enabled** — GitHub API: `lint`, `test`, `frontend` required checks on `main`, strict mode, force push blocked.
-- **Tagged release** — `pre-llm-deck-gen-pre-mc` tag on `affd54d`.
-
-### Decisions
-- Branch protection enforce_admins left OFF so owner can push directly when needed
-- `integration` check excluded from required checks (uses continue-on-error due to KLayout availability)
-
-### Next
-- Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
-- LLM-assisted DRC deck generator — auto-generate rules from DRM tables
-- More PDKs — GF180, ASAP7 (solidify SKY130 framework first)

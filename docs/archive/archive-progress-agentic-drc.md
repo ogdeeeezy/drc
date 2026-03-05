@@ -303,3 +303,25 @@
 
 #### Next
 - CI/CD implementation (done in Session 14)
+
+---
+
+## Archived: 2026-03-05 | Git: 2b2edd9
+
+## Session 17: 2026-03-04 — Error hints implementation + branch protection
+
+### Done
+- **Error hints implemented** (`affd54d`) — Centralized `error_hints.py` with 14 regex→hint rules, `hint` field on Job model + DB schema (with ALTER TABLE migration), route wiring in drc.py/lvs.py, amber hint box UI in frontend. 730 tests, 95% coverage.
+- **OSError runner tests** — 4 new tests each for DRC/LVS runners covering exec format error and permission denied paths (sync + async).
+- **Error hints test suite** — 19 tests covering all regex patterns, edge cases, first-match-wins behavior.
+- **Branch protection enabled** — GitHub API: `lint`, `test`, `frontend` required checks on `main`, strict mode, force push blocked.
+- **Tagged release** — `pre-llm-deck-gen-pre-mc` tag on `affd54d`.
+
+### Decisions
+- Branch protection enforce_admins left OFF so owner can push directly when needed
+- `integration` check excluded from required checks (uses continue-on-error due to KLayout availability)
+
+### Next
+- Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
+- LLM-assisted DRC deck generator — auto-generate rules from DRM tables
+- More PDKs — GF180, ASAP7 (solidify SKY130 framework first)
