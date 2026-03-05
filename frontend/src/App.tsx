@@ -69,9 +69,22 @@ export function App() {
     try {
       const result = await api.runDRC(jobId);
       setDrcResult(result);
-      const viols = await api.getViolations(jobId);
-      setViolations(viols);
-      setStage("drc");
+      // Poll for DRC completion (async background task)
+      for (let i = 0; i < 120; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const job = await api.getJob(jobId);
+        if (job.status === "drc_complete") {
+          const viols = await api.getViolations(jobId);
+          setViolations(viols);
+          setStage("drc");
+          return;
+        }
+        if (job.status === "drc_failed") {
+          if (job.hint) setHint(job.hint);
+          throw new Error(job.error ?? "DRC failed");
+        }
+      }
+      throw new Error("DRC timed out");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
