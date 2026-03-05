@@ -183,14 +183,35 @@ export class WebGLRenderer {
   pan(dx: number, dy: number) {
     this.camera.x -= dx / this.camera.zoom;
     this.camera.y -= dy / this.camera.zoom;
+    this.clampCamera();
   }
 
   zoom(factor: number, cx: number, cy: number) {
     const worldX = this.camera.x + cx / this.camera.zoom;
     const worldY = this.camera.y + cy / this.camera.zoom;
     this.camera.zoom *= factor;
+    this.clampZoom();
     this.camera.x = worldX - cx / this.camera.zoom;
     this.camera.y = worldY - cy / this.camera.zoom;
+    this.clampCamera();
+  }
+
+  private clampZoom() {
+    const [xmin, ymin, xmax, ymax] = this.bbox;
+    const w = xmax - xmin || 1;
+    const h = ymax - ymin || 1;
+    const fitZoom = Math.min(this.width / w, this.height / h);
+    this.camera.zoom = Math.max(fitZoom * 0.1, Math.min(fitZoom * 100, this.camera.zoom));
+  }
+
+  private clampCamera() {
+    const [xmin, ymin, xmax, ymax] = this.bbox;
+    const viewW = this.width / this.camera.zoom;
+    const viewH = this.height / this.camera.zoom;
+    // Keep at least 20% of viewport overlapping with the layout bbox
+    const margin = 0.2;
+    this.camera.x = Math.max(xmin - viewW * (1 - margin), Math.min(xmax - viewW * margin, this.camera.x));
+    this.camera.y = Math.max(ymin - viewH * (1 - margin), Math.min(ymax - viewH * margin, this.camera.y));
   }
 
   zoomToBox(bbox: number[]) {

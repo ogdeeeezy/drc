@@ -91,6 +91,13 @@ export function LayoutViewer({ layout, hiddenLayers, selectedViolation }: Props)
     isDragging.current = false;
   }, []);
 
+  // Double-click to reset view
+  const onDoubleClick = useCallback(() => {
+    if (!rendererRef.current) return;
+    rendererRef.current.fitView();
+    rendererRef.current.render(hiddenLayers);
+  }, [hiddenLayers]);
+
   // Scroll wheel for zoom
   const onWheel = useCallback(
     (e: React.WheelEvent) => {
@@ -114,6 +121,7 @@ export function LayoutViewer({ layout, hiddenLayers, selectedViolation }: Props)
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
+      onDoubleClick={onDoubleClick}
       onWheel={onWheel}
     />
   );
