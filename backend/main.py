@@ -1,7 +1,11 @@
 """FastAPI application entry point."""
 
+import pathlib
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.api.deps import get_job_manager
 from backend.api.routes import drc, export, fix, layout, lvs, pcell, pdk, upload
@@ -14,7 +18,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:3000",
+        "https://sky130drc.duckdns.org",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -54,3 +62,14 @@ async def get_job(job_id: str):
 
         raise HTTPException(404, f"Job '{job_id}' not found")
     return job.to_dict()
+
+
+# Static file serving for production (frontend/dist built by Docker)
+_dist = pathlib.Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if _dist.is_dir():
+    app.mount("/assets", StaticFiles(directory=_dist / "assets"), name="assets")
+
+    @app.get("/{path:path}")
+    async def spa_catch_all(path: str):
+        """Serve index.html for all non-API routes (SPA routing)."""
+        return FileResponse(_dist / "index.html")

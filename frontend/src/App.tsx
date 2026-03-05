@@ -339,6 +339,28 @@ export function App() {
           </div>
         )}
       </div>
+      {/* Feedback button */}
+      <a
+        href="https://github.com/ogdeeeezy/drc/issues/new"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          position: "fixed",
+          bottom: 16,
+          right: 16,
+          background: "#e94560",
+          color: "#fff",
+          padding: "8px 16px",
+          borderRadius: 20,
+          fontSize: 13,
+          fontWeight: 600,
+          textDecoration: "none",
+          zIndex: 1000,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+        }}
+      >
+        Give Feedback
+      </a>
     </div>
   );
 }

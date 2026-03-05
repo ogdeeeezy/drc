@@ -68,6 +68,9 @@ KLayout's `mos4("NMOS")` extracts devices with class name `NMOS`, but SPICE netl
 ### Body terminal needs a physical tap — labels alone don't create pins
 A `gdstk.Label("B", ...)` on `met1_lbl` only names a net; it doesn't create a pin or physical connection. For LVS body matching, the layout needs a complete physical path: `tap(65/44) → licon → li1 → mcon → met1`, where the tap connects to the well via `connect(pwell, ptap)` in the LVS deck. Without this, the body net is extracted (from the device's W terminal connecting to pwell) but has no pin — the schematic's B pin has nothing to match against. **Lesson: in LVS, every schematic pin needs a physical shape on a pinnable layer connected through the full extraction stack, not just a text label.**
 
+### VPS deployment recon: 4 commands, 30 seconds
+When deploying to a VPS, check `~/.ssh/known_hosts` to find the IP (saves asking the user to dig through provider dashboards). Then SSH in and run 4 checks: existing reverse proxy config (`cat /etc/caddy/Caddyfile` or nginx), running containers (`docker ps`), port conflicts (`ss -tlnp :80,:443,:8000`), and DNS resolution (`dig +short domain`). This gave a complete deployment picture instantly — discovered Caddy already running with auto-SSL, which eliminated the entire nginx/certbot setup. **Lesson: always recon existing infrastructure before planning deployment; the simplest path is often already half-built.**
+
 ---
 
 ## 2026-03-04 — Session 16: Error Hints Planning
