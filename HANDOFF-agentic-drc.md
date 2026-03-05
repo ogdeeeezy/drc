@@ -5,12 +5,12 @@ Open-source DRC tool — PVS alternative for semiconductor layout verification. 
 
 ## Current State
 - **Phases 1-5**: ALL COMPLETE (33/33 stories)
-- **730 unit + 12 E2E tests passing**, 95% coverage, frontend builds clean
+- **730 unit tests passing**, 95% coverage, frontend builds clean
 - **GitHub**: https://github.com/ogdeeeezy/drc — all pushed to main
 - **Branch protection**: `lint`, `test`, `frontend` required on main (strict mode)
 - **Tagged**: `pre-llm-deck-gen-pre-mc` on `affd54d`
-- **LVS deck fixed**: mos4 extraction now works (pre-split SD, clipped gate, bridged connectivity)
-- **Uncommitted changes**: database.py migration, sky130A.lvs deck fix, mosfet.py T-pad offset
+- **LVS fully working**: NMOS + PMOS single-finger DRC-clean and LVS-match verified E2E
+- **Uncommitted**: mosfet.py (substrate taps), sky130A.lvs (same_device_classes), test assertions
 
 ## How to Run
 - Backend: `make run` (uvicorn on port 8000)
@@ -19,17 +19,16 @@ Open-source DRC tool — PVS alternative for semiconductor layout verification. 
 - E2E: `.venv/bin/python -m pytest tests/integration/test_e2e_phase5.py -v -s` (requires KLayout)
 
 ## Immediate Next
-1. **Test full LVS flow end-to-end** — restart server, generate NMOS, upload, DRC, upload netlist, run LVS, verify match
-2. **Add substrate taps to PCells** — body terminal needs ptap/ntap for LVS net matching (body auto-named "$5" without taps)
-3. **Revert T-pad offset in mosfet.py** — harmless but unnecessary change (lines ~185-200, the `snap(diff_h + r.grid)` / `snap(-r.grid)` offsets)
-4. Monte Carlo optimization — klayout.db in-process
+1. **Commit substrate tap + LVS deck changes** — 3 modified files ready to commit
+2. **Multi-finger LVS fix** — S/D met1 pads are disconnected for 2+ fingers; need met1 bus connecting shared S and D terminals
+3. **Revert T-pad offset in mosfet.py** — harmless but unnecessary (lines ~185-200, `snap(diff_h + r.grid)` / `snap(-r.grid)` offsets)
+4. Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
 5. LLM-assisted DRC deck generator
 
-## Key LVS Fix (Session 18)
-Root cause: KLayout `mos4` extraction requires SD layer already split into separate S/D polygons. Fix in `sky130A.lvs`:
-- `nsd = (diff & nsdm) - gate_poly` — pre-splits at gate edges
-- `gate_in_active = gate_poly & active` — clips gate for correct L
-- `connect(gate_in_active, gate_poly)` — bridges extraction to routing
+## Key LVS Architecture
+- **LVS deck** (`backend/pdk/configs/sky130/sky130A.lvs`): Pre-splits SD at gate, clips gate to active, bridges gate_in_active↔gate_poly, maps NMOS→SKY130_FD_PR__NFET_01V8
+- **Substrate taps** (`backend/pcell/mosfet.py` section 10): ptap for NMOS / ntap for PMOS, placed left of diff with 0.130µm implant gap, full contact stack to met1 with "B" label
+- **PMOS nwell**: Extended leftward to enclose ntap
 
 ## Gotchas
 - SKY130 DRC deck defaults ALL rule groups to disabled — `DEFAULT_DRC_FLAGS` fixes this
@@ -38,4 +37,5 @@ Root cause: KLayout `mos4` extraction requires SD layer already split into separ
 - MOSFET min contactable W is ~0.26um (licon_size + 2*licon_enc_by_diff), not 0.15um
 - **KLayout mos4 won't auto-split continuous diff** — SD layer must be pre-split by subtracting gate_poly
 - **Gate L computed from gate area / W** — must clip gate to active area or endcaps inflate L
+- **Multi-finger S/D pads are electrically disconnected** — each met1 pad is separate, needs bus for LVS
 - DRC deck rule descriptions can lie — via2.5 says "m3 enclosure" but checks m2

@@ -1,6 +1,27 @@
 # PROGRESS-agentic-drc
 
-> Sessions 1-15 archived → `docs/archive/archive-progress-agentic-drc.md`
+> Sessions 1-16 archived → `docs/archive/archive-progress-agentic-drc.md`
+
+---
+
+## Session 19: 2026-03-05 — Full LVS E2E verified
+
+### Done
+- **LVS E2E flow verified** — Generate PCell → upload GDS → DRC (0 violations) → upload SPICE netlist → run LVS → **match** (1 device, 4 nets). Both NMOS and PMOS single-finger pass clean.
+- **Substrate taps added to PCells** — ptap for NMOS, ntap for PMOS. Full contact stack (tap → licon → li1 → mcon → met1 with "B" label). Placed left of diff with 0.130 µm implant clearance.
+- **LVS deck device class mapping** — Added `same_device_classes("NMOS", "SKY130_FD_PR__NFET_01V8")` and PMOS equivalent. Maps extraction names to SPICE model names.
+- **Tests updated** — Implant assertions updated for tap presence. 730 tests, 95% coverage.
+
+### Decisions
+- Substrate tap placed LEFT of diffusion (not below) to avoid gate contact conflicts
+- Implant gap = 0.130 µm between nsdm/psdm edges (matches difftap.10)
+- PMOS nwell extended leftward to enclose ntap
+
+### Next
+- **Multi-finger LVS** — S/D pads disconnected for 2+ fingers (need met1 bus connecting shared terminals)
+- **Revert T-pad offset in mosfet.py** — harmless but unnecessary (lines ~185-200)
+- Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
+- LLM-assisted DRC deck generator
 
 ---
 
@@ -17,11 +38,7 @@
 - `connect(gate_in_active, gate_poly)` bridges extraction layer to routing layer for connectivity
 
 ### Next
-- **Test full LVS flow end-to-end** via API with updated deck (server restart + generate + upload + DRC + LVS)
-- **Add substrate taps to PCells** — body terminal needs ptap/ntap for proper LVS net matching (currently auto-named "$5")
-- **Revert T-pad offset in mosfet.py** — change was harmless but unnecessary (LVS fix was in deck, not geometry)
-- Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
-- LLM-assisted DRC deck generator
+- Test full LVS flow end-to-end (done in Session 19)
 
 ---
 
@@ -42,18 +59,3 @@
 - Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
 - LLM-assisted DRC deck generator — auto-generate rules from DRM tables
 - More PDKs — GF180, ASAP7 (solidify SKY130 framework first)
-
----
-
-## Session 16: 2026-03-04 — Error hints plan + coverage gap analysis
-
-### Done
-- **Coverage gap analysis** — Identified all untested error paths in the 6% gap: OSError subprocess failures, timeouts, missing DRC decks, OS-specific config detection, PCell validation guards. Mapped each to user-facing impact (cryptic vs actionable).
-- **Error hints plan** (`docs/tmp-error-hints-plan.md`) — Full implementation plan for centralized `error_hints.py` module (regex→hint mapping), `hint` field on Job model/DB, API wiring, and amber tooltip UI in frontend. ~270 lines across 10 files.
-
-### Decisions
-- Centralized hint mapping (single `error_hints.py`) over adding `hint` field to each error class — keeps presentation concerns separate, easier to maintain
-- Always-visible hint box (amber below red error) over hover tooltip — more accessible, no hidden info
-
-### Next
-- Implement error hints plan (done in Session 17)

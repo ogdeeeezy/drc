@@ -60,6 +60,14 @@ KLayout computes gate L = gate_polygon_area / W. If the gate poly extends beyond
 ### Test hypotheses methodically — don't assume the first theory
 The initial hypothesis was that T-shaped poly (widened for gate contacts) confused KLayout. Built a test with perfectly straight gate — same error. Then tried diff taller than gate, rotated layout, etc. Each test took ~2min via KLayout batch mode. The root cause (SD not pre-split) was only found on the 5th hypothesis. **Lesson: when debugging PDK tool interactions, create minimal test cases and vary one variable at a time.**
 
+## 2026-03-05 — Session 19: LVS E2E Verification
+
+### LVS device class names must be mapped explicitly
+KLayout's `mos4("NMOS")` extracts devices with class name `NMOS`, but SPICE netlists use PDK model names like `sky130_fd_pr__nfet_01v8`. Without `same_device_classes("NMOS", "SKY130_FD_PR__NFET_01V8")` in the LVS deck, the comparator sees two completely different device types — all nets and devices show as mismatched even when the geometry is perfectly correct. **This is easy to miss because the LVS report shows net/device mismatches that look like connectivity problems, not naming problems.** Always check device class names in the LVSDB `K()` and `D()` entries first.
+
+### Body terminal needs a physical tap — labels alone don't create pins
+A `gdstk.Label("B", ...)` on `met1_lbl` only names a net; it doesn't create a pin or physical connection. For LVS body matching, the layout needs a complete physical path: `tap(65/44) → licon → li1 → mcon → met1`, where the tap connects to the well via `connect(pwell, ptap)` in the LVS deck. Without this, the body net is extracted (from the device's W terminal connecting to pwell) but has no pin — the schematic's B pin has nothing to match against. **Lesson: in LVS, every schematic pin needs a physical shape on a pinnable layer connected through the full extraction stack, not just a text label.**
+
 ---
 
 ## 2026-03-04 — Session 16: Error Hints Planning

@@ -2,6 +2,23 @@
 
 ---
 
+## Archived: 2026-03-05 | Git: 5b6888f
+
+### Session 16: 2026-03-04 — Error hints plan + coverage gap analysis
+
+#### Done
+- **Coverage gap analysis** — Identified all untested error paths in the 6% gap: OSError subprocess failures, timeouts, missing DRC decks, OS-specific config detection, PCell validation guards. Mapped each to user-facing impact (cryptic vs actionable).
+- **Error hints plan** (`docs/tmp-error-hints-plan.md`) — Full implementation plan for centralized `error_hints.py` module (regex→hint mapping), `hint` field on Job model/DB, API wiring, and amber tooltip UI in frontend. ~270 lines across 10 files.
+
+#### Decisions
+- Centralized hint mapping (single `error_hints.py`) over adding `hint` field to each error class — keeps presentation concerns separate, easier to maintain
+- Always-visible hint box (amber below red error) over hover tooltip — more accessible, no hidden info
+
+#### Next
+- Implement error hints plan (done in Session 17)
+
+---
+
 ## Archived: 2026-03-05 | Git: 9d1322c
 
 ### Session 15: 2026-03-04 — Fix strategy test coverage 91% → 94%
