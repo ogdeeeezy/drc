@@ -61,11 +61,16 @@ met5_lbl   = input(72, 5)
 # P-well: implicit p-type substrate (everywhere n-well is absent)
 pwell = extent.not(nwell)
 
-# N+ active (NMOS source/drain): diffusion with N+ implant
-nsd = diff & nsdm
+# Gate poly: polysilicon NOT marked as resistor
+gate_poly = poly - poly_res
 
-# P+ active (PMOS source/drain): diffusion with P+ implant
-psd = diff & psdm
+# N+ active (NMOS source/drain): diffusion with N+ implant, minus gate
+# Subtracting gate_poly pre-splits the SD layer so KLayout mos4 extraction
+# sees two separate S/D polygons (source and drain) on each side of the gate.
+nsd = (diff & nsdm) - gate_poly
+
+# P+ active (PMOS source/drain): diffusion with P+ implant, minus gate
+psd = (diff & psdm) - gate_poly
 
 # Well/substrate taps for body contacts
 ntap = tap & nsdm    # N-well tap (connects nwell to VDD)
@@ -74,28 +79,27 @@ ptap = tap & psdm    # P-substrate tap (connects pwell to VSS)
 # Poly resistor body: poly with resistor ID marker
 poly_resistor_body = poly & poly_res
 
-# Gate poly: polysilicon NOT marked as resistor
-gate_poly = poly - poly_res
+# Gate clipped to active area — ensures L is computed from channel geometry
+# only (not from poly endcaps extending beyond diffusion).
+active = diff | tap
+gate_in_active = gate_poly & active
 
 # -- Device Extraction -------------------------------------------------------
 # NMOS: N-channel MOSFET in p-type substrate
-#   Source/drain = N+ diffusion
-#   Gate = polysilicon (excluding resistor-marked poly)
+#   Source/drain = N+ diffusion (pre-split at gate edges)
+#   Gate = poly clipped to active area (correct L computation)
 #   Well/body = p-substrate
 extract_devices(mos4("NMOS"), {
   "SD" => nsd,
-  "G"  => gate_poly,
+  "G"  => gate_in_active,
   "W"  => pwell,
   "tS" => nsd
 })
 
 # PMOS: P-channel MOSFET in n-well
-#   Source/drain = P+ diffusion
-#   Gate = polysilicon (excluding resistor-marked poly)
-#   Well/body = n-well
 extract_devices(mos4("PMOS"), {
   "SD" => psd,
-  "G"  => gate_poly,
+  "G"  => gate_in_active,
   "W"  => nwell,
   "tS" => psd
 })
@@ -109,6 +113,9 @@ extract_devices(resistor("RES", 2000.0), {
 })
 
 # -- Connectivity ------------------------------------------------------------
+# Bridge clipped gate (used for extraction) to full poly (used for routing)
+connect(gate_in_active, gate_poly)
+
 # Diffusion/tap to local interconnect contacts
 connect(nsd,   licon)
 connect(psd,   licon)

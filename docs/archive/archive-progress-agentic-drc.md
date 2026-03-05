@@ -2,6 +2,19 @@
 
 ---
 
+## Archived: 2026-03-05 | Git: 9d1322c
+
+### Session 15: 2026-03-04 — Fix strategy test coverage 91% → 94%
+
+#### Done
+- **Fix strategy tests** — 38 new tests covering all 4 strategy files: shrink-fix path, extension directions, collision branches, degenerate polygon handling, polygon-finding fallbacks, edge-pair geometry. 703 unit tests passing.
+- **Coverage pushed** — spacing.py 62→98%, area.py 67→96%, width.py 71→95%, short.py 72→95%. Overall 91% → 94%.
+
+#### Next
+- Error hints + remaining coverage (done in Session 16 planning)
+
+---
+
 ## Archived: 2026-03-04 | Git: affd54d
 
 ### Session 14: 2026-03-04 — CI/CD enhancement + API test coverage

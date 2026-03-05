@@ -273,6 +273,9 @@ class MOSFETGenerator(PCellGenerator):
             ))
 
             # T-gate widening for gate contact if L < gc_licon_width
+            # Offset T-pads by one grid unit from diff boundary so the merged
+            # poly is narrow (gate stem only) at the diff edge — required for
+            # KLayout LVS mos4 extraction to cleanly split S/D regions.
             if gl < gc_licon_width:
                 poly_cx = snap(gx0 + gl / 2)
                 pad_half = snap(gc_licon_width / 2)
@@ -281,12 +284,12 @@ class MOSFETGenerator(PCellGenerator):
 
                 if gate_contact in ("top", "both"):
                     cell.add(gdstk.rectangle(
-                        (pad_x0, diff_h), (pad_x1, diff_h + gc_ext_top),
+                        (pad_x0, snap(diff_h + r.grid)), (pad_x1, diff_h + gc_ext_top),
                         layer=LYR_POLY[0], datatype=LYR_POLY[1],
                     ))
                 if gate_contact in ("bottom", "both"):
                     cell.add(gdstk.rectangle(
-                        (pad_x0, -gc_ext_bot), (pad_x1, 0),
+                        (pad_x0, -gc_ext_bot), (pad_x1, snap(-r.grid)),
                         layer=LYR_POLY[0], datatype=LYR_POLY[1],
                     ))
 

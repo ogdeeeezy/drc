@@ -43,3 +43,26 @@ m1.6 (min area) enforcement extends S/D met1 pads vertically, making them taller
 
 ### DRC deck rule descriptions lie — always read the source
 SKY130's `via2.5` rule description says "min. m3 enclosure of via2 of 2 adjacent edges" but the actual code checks `m2.enclosing(via2, 0.085, projection)` — **met2**, not met3. Session 11 added met3 margins thinking that was the fix; it wasn't. The real issue was the met2 pad using 0.040µm (via2.4) instead of 0.085µm (via2.5). **When a DRC violation persists after fixing what the description says, read the `.drc` deck source to see what the rule actually checks.** Open-source PDK decks have documentation bugs just like code.
+
+## 2026-03-04 — Session 15: Fix Strategy Test Coverage
+
+### Geometric test coverage requires matching violation bbox aspect ratios to code branches
+In `short.py`, the `w >= h` check routes to horizontal vs vertical shrink. All initial tests used tall violation bboxes (edge pairs spanning full polygon height), so they all took the vertical path — leaving horizontal completely uncovered. The fix was designing edge pairs where the overlap region is explicitly wider than tall (e.g., two wide-and-short polygons overlapping along their width). **Same pattern applies to any geometry code with aspect-ratio branching — `area.py`, `width.py`, and `spacing.py` all have similar `w >= h` / `w < h` forks.** When writing geometric tests, always check both bbox orientations.
+
+## 2026-03-05 — Session 18: LVS Deck Root Cause
+
+### KLayout mos4 extraction requires pre-split SD layer
+KLayout's `mos4` device extractor does NOT auto-split a continuous diffusion rectangle at gate edges. It expects the SD layer to already be two separate polygons (source and drain). A continuous diff rectangle triggers "Expected two polygons on diff interacting with one gate shape — ignored." **Fix: define SD as `(diff & nsdm) - gate_poly` in the LVS deck** so the boolean subtraction pre-splits it. Tested 6 hypotheses (T-pad shape, gate height, diff height, rotation, split diff, clipped gate) before isolating this. The geometry was always correct — the extraction recipe was wrong.
+
+### Gate endcaps inflate L computation — clip gate to active area
+KLayout computes gate L = gate_polygon_area / W. If the gate poly extends beyond diffusion (endcaps for contacts), that extra area inflates L. E.g., L=0.432 instead of L=0.15 for a gate with 0.395µm endcaps. **Fix: use `gate_in_active = gate_poly & active` for the "G" extraction terminal.** Then bridge back with `connect(gate_in_active, gate_poly)` for routing connectivity.
+
+### Test hypotheses methodically — don't assume the first theory
+The initial hypothesis was that T-shaped poly (widened for gate contacts) confused KLayout. Built a test with perfectly straight gate — same error. Then tried diff taller than gate, rotated layout, etc. Each test took ~2min via KLayout batch mode. The root cause (SD not pre-split) was only found on the 5th hypothesis. **Lesson: when debugging PDK tool interactions, create minimal test cases and vary one variable at a time.**
+
+---
+
+## 2026-03-04 — Session 16: Error Hints Planning
+
+### Untested error paths are a UX problem, not just a coverage metric
+The 6% uncovered code wasn't "unimportant defensive code" — it was the exact code that runs when users hit problems. If error-handling code itself has bugs or writes cryptic messages (e.g., `"Failed to execute KLayout: [Errno 8] Exec format error"`), users get stuck with no guidance at the worst possible moment. **Coverage gaps in error paths should be evaluated by "what does the user see when this runs?" not just "is this line exercised?"** The fix isn't just adding tests — it's improving the messages themselves and adding actionable hints. A centralized hint mapping (`regex → user-friendly guidance`) is more maintainable than scattering hints across error classes.

@@ -82,11 +82,12 @@ class Database:
         conn = self._get_conn()
         conn.execute(_SCHEMA)
         conn.execute(_PROVENANCE_SCHEMA)
-        # Migration: add hint column for existing databases
-        try:
-            conn.execute("ALTER TABLE jobs ADD COLUMN hint TEXT")
-        except sqlite3.OperationalError:
-            pass  # Column already exists
+        # Migrations: add columns for existing databases
+        for col in ("hint TEXT", "netlist_path TEXT", "lvs_report_path TEXT"):
+            try:
+                conn.execute(f"ALTER TABLE jobs ADD COLUMN {col}")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
         conn.commit()
 
     def _get_conn(self) -> sqlite3.Connection:
