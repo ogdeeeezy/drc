@@ -4,6 +4,27 @@
 
 ---
 
+## Session 20: 2026-03-05 — Deployed to VPS
+
+### Done
+- **Deployed to production** (`614a181`) — Live at https://sky130drc.duckdns.org with auto-SSL via Caddy
+- **Static file serving** — FastAPI serves `frontend/dist` at `/` with SPA catch-all for client-side routing
+- **CORS updated** — Added `https://sky130drc.duckdns.org` to allowed origins
+- **.dockerignore added** — Excludes .venv, node_modules, tests, .git from Docker context
+- **Feedback button** — Fixed-position "Give Feedback" link → GitHub Issues in bottom-right corner
+- **Docker healthcheck fixed** — Replaced `curl` with Python `urllib` (curl not in python:3.12-slim)
+
+### Decisions
+- Static files mounted as `/assets` + SPA catch-all at `/{path:path}` (not full StaticFiles at `/` which would conflict with API routes)
+- Caddy handles SSL termination — no cert management needed in app
+
+### Next
+- **Multi-finger LVS** — S/D met1 pads disconnected for 2+ fingers (need met1 bus)
+- Monte Carlo optimization
+- LLM-assisted DRC deck generator
+
+---
+
 ## Session 19: 2026-03-05 — Full LVS E2E verified
 
 ### Done
