@@ -2,6 +2,21 @@
 
 ---
 
+## Archived: 2026-03-06 | Git: 5494e34
+
+### Session 18: 2026-03-05 — LVS deck fix + end-to-end testing
+
+#### Done
+- **PCell generation E2E** — Tested all 5 device types via API: NMOS, PMOS, poly resistor, MIM capacitor, minimum NMOS. All DRC-clean (0 violations).
+- **SQLite migration fix** — Added migration for `netlist_path` and `lvs_report_path` columns in `database.py`.
+- **LVS deck root cause found** — KLayout mos4 extraction requires SD layer pre-split at gate edges.
+- **sky130A.lvs rewritten** — Pre-split SD, clip gate to active area, bridge connectivity. Device extracts with correct L=0.15, W=0.42.
+
+#### Decisions
+- Gate clipped to active area for extraction (not full poly) — prevents endcap area from inflating L computation
+
+---
+
 ## Archived: 2026-03-05 | Git: 5b6888f
 
 ### Session 16: 2026-03-04 — Error hints plan + coverage gap analysis

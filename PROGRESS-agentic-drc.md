@@ -1,6 +1,26 @@
 # PROGRESS-agentic-drc
 
-> Sessions 1-17 archived → `docs/archive/archive-progress-agentic-drc.md`
+> Sessions 1-18 archived → `docs/archive/archive-progress-agentic-drc.md`
+
+---
+
+## Session 21: 2026-03-06 — Multi-finger met1 S/D bus routing
+
+### Done
+- **Met1 bus bars for multi-finger LVS** (uncommitted) — Source bus above S/D pads, drain bus below. Horizontal bars span all same-terminal pad X positions. Vertical drops connect each pad to its bus. Single-finger devices unchanged.
+- **Gate contact clearance updated** — Gate met1 pads now clear bus bars (not just S/D pads) with m1.2 spacing for multi-finger devices.
+- **Tests added** — 3 new tests in `TestMultiFingerPMOS` (source bus, drain bus, single-finger no bus) + new `TestMultiFingerNMOS` class (4 tests). 41 mosfet tests, 737 total, all passing.
+
+### Decisions
+- Bus width = `met1_min_width` (0.140 µm), gap = `met1_min_spacing` (0.140 µm)
+- Bus Y positions computed before gate contact placement so clearance accounts for bus metal
+
+### Next
+- Commit + redeploy multi-finger bus routing
+- Generate 4-finger NMOS/PMOS via API and run DRC — verify 0 violations
+- Upload multi-finger GDS + SPICE netlist, run LVS — verify match
+- Monte Carlo optimization
+- LLM-assisted DRC deck generator
 
 ---
 
@@ -20,9 +40,7 @@
 - Redeploy: `ssh root@104.156.154.153 "cd /opt/drc && git pull && docker compose up -d --build"`
 
 ### Next
-- **Multi-finger LVS** — S/D met1 pads disconnected for 2+ fingers (need met1 bus)
-- Monte Carlo optimization
-- LLM-assisted DRC deck generator
+- Multi-finger LVS (done in Session 21)
 
 ---
 
@@ -40,19 +58,3 @@
 
 ### Next
 - Deploy to VPS (done in Session 20)
-
----
-
-## Session 18: 2026-03-05 — LVS deck fix + end-to-end testing
-
-### Done
-- **PCell generation E2E** — Tested all 5 device types via API: NMOS, PMOS, poly resistor, MIM capacitor, minimum NMOS. All DRC-clean (0 violations).
-- **SQLite migration fix** — Added migration for `netlist_path` and `lvs_report_path` columns in `database.py`.
-- **LVS deck root cause found** — KLayout mos4 extraction requires SD layer pre-split at gate edges.
-- **sky130A.lvs rewritten** — Pre-split SD, clip gate to active area, bridge connectivity. Device extracts with correct L=0.15, W=0.42.
-
-### Decisions
-- Gate clipped to active area for extraction (not full poly) — prevents endcap area from inflating L computation
-
-### Next
-- Test full LVS flow end-to-end (done in Session 19)

@@ -77,3 +77,21 @@ When deploying to a VPS, check `~/.ssh/known_hosts` to find the IP (saves asking
 
 ### Untested error paths are a UX problem, not just a coverage metric
 The 6% uncovered code wasn't "unimportant defensive code" — it was the exact code that runs when users hit problems. If error-handling code itself has bugs or writes cryptic messages (e.g., `"Failed to execute KLayout: [Errno 8] Exec format error"`), users get stuck with no guidance at the worst possible moment. **Coverage gaps in error paths should be evaluated by "what does the user see when this runs?" not just "is this line exercised?"** The fix isn't just adding tests — it's improving the messages themselves and adding actionable hints. A centralized hint mapping (`regex → user-friendly guidance`) is more maintainable than scattering hints across error classes.
+
+---
+
+## 2026-03-05 — Session 20: Production Deploy + Bugfixes
+
+### Async backend + synchronous frontend = silent UX failure
+The DRC endpoint returns immediately (async background task) but the frontend called `getViolations` right after — before DRC finished. The error wasn't obvious: it manifested as a confusing 409 on the *second* click, not a clear "not ready" on the first. LVS already had polling; DRC didn't. **Lesson: any async backend task needs a polling loop on the frontend. Audit all fire-and-forget POST endpoints for matching frontend poll logic.**
+
+### python:3.12-slim has almost nothing
+No `curl`, no `wget`. Docker healthchecks need `python -c "import urllib.request; urllib.request.urlopen(...)"` instead. Easy to miss because local dev always has these tools.
+
+### Unconstrained pan/zoom = guaranteed user confusion
+Every canvas-based viewer needs viewport clamping from day one. The fix was trivial (20 lines — clamp pan so 20% overlaps bbox, bound zoom 0.1x–100x, double-click reset) but the UX impact was major — users lose the layout and think the tool is broken. **Lesson: always add viewport bounds when building interactive canvas viewers. The cost is 20 lines; the cost of not doing it is users thinking the app is broken.**
+
+## 2026-03-06 — Session 21: Multi-Finger Bus Routing
+
+### New metal structures must update clearance references before dependent geometry
+Adding met1 bus bars between S/D pads and gate contact pads creates a new "closest metal" for m1.2 spacing. The bus top edge (`src_bus_top`) replaces `sd_met1_top` as the clearance reference for gate contact Y positioning. Computing bus positions AFTER gate contact placement would require a second pass to fix clearance — instead, compute bus Y positions immediately after S/D met1 bounds, then feed into gate contact clearance. **This extends the Session 12 insight ("compute dependent geometry in correct order"): any new structure inserted between existing layers must be computed before anything that depends on clearance to those layers.**

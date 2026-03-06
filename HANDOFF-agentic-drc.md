@@ -5,16 +5,17 @@ Open-source DRC tool — PVS alternative for semiconductor layout verification. 
 
 ## Current State
 - **Phases 1-5**: ALL COMPLETE (33/33 stories)
-- **730 unit tests passing**, 95% coverage, frontend builds clean
+- **737 unit tests passing**, 95% coverage, frontend builds clean
 - **GitHub**: https://github.com/ogdeeeezy/drc — all pushed to main
-- **LVS fully working**: NMOS + PMOS single-finger DRC-clean and LVS-match verified E2E
+- **LVS fully working**: Single-finger NMOS + PMOS DRC-clean and LVS-match verified E2E
+- **Multi-finger bus routing**: Met1 bus bars implemented (uncommitted) — connects S/D pads for LVS
 - **DEPLOYED**: https://sky130drc.duckdns.org — live with auto-SSL via Caddy
 
 ## How to Run
 - **Production**: https://sky130drc.duckdns.org
 - **Redeploy**: `ssh root@104.156.154.153 "cd /opt/drc && git pull && docker compose up -d --build"`
 - **Local dev**: `make run` (backend 8000) + `make frontend` (Vite 5173)
-- **Tests**: `.venv/bin/python -m pytest tests/unit/ -q --cov=backend` (730 tests, 95%)
+- **Tests**: `.venv/bin/python -m pytest tests/unit/ -q --cov=backend` (737 tests, 95%)
 
 ## VPS Details
 - **IP**: 104.156.154.153 (SSH as root, key in ~/.ssh/id_ed25519)
@@ -24,14 +25,17 @@ Open-source DRC tool — PVS alternative for semiconductor layout verification. 
 - **Also running**: `gantamade.duckdns.org` on same Caddy instance
 
 ## Immediate Next
-- **Multi-finger LVS** — S/D met1 pads disconnected for 2+ fingers (need met1 bus connecting shared source/drain terminals)
+- **Commit + verify multi-finger LVS** — Bus routing code is written and tested. Generate 4-finger GDS, run DRC (expect 0), upload SPICE netlist, run LVS (expect match).
 - **Monte Carlo optimization** — klayout.db in-process for 10k+ geometric variants
 - **LLM-assisted DRC deck generator** — auto-generate rules from DRM tables
+
+## Hot Files
+- `backend/pcell/mosfet.py` — Met1 bus routing added (step 7b), gate clearance updated
+- `tests/unit/test_pcell_mosfet.py` — New TestMultiFingerNMOS class + bus connectivity tests
 
 ## Gotchas
 - SKY130 DRC deck defaults ALL rule groups to disabled — `DEFAULT_DRC_FLAGS` fixes this
 - KLayout macOS needs Gatekeeper bypass: `sudo xattr -r -d com.apple.quarantine /Applications/KLayout/klayout.app`
 - .lvsdb format is NOT XML — S-expression text (custom parser in lvs_parser.py)
-- **Multi-finger S/D pads are electrically disconnected** — needs met1 bus for LVS
 - DRC deck rule descriptions can lie — via2.5 says "m3 enclosure" but checks m2
 - Docker healthcheck uses Python urllib (not curl — python:3.12-slim doesn't have curl)
