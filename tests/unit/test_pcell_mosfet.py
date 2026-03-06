@@ -256,6 +256,89 @@ class TestMultiFingerPMOS:
         assert s_count == 3
         assert d_count == 2
 
+    def test_source_bus_connects_all_sources(self, result):
+        """A horizontal met1 bus bar must span all source pad X positions."""
+        labels = _labels_on_layer(result.cell, *LYR_MET1_LBL)
+        src_xs = sorted(lb.origin[0] for lb in labels if lb.text == "S")
+        assert len(src_xs) == 3
+
+        met1 = _polys_on_layer(result.cell, *LYR_MET1)
+        bus_found = any(
+            p.bounding_box()[0][0] <= src_xs[0] + 0.001
+            and p.bounding_box()[1][0] >= src_xs[-1] - 0.001
+            for p in met1
+        )
+        assert bus_found, "No met1 bus bar spanning all source X positions"
+
+    def test_drain_bus_connects_all_drains(self, result):
+        """A horizontal met1 bus bar must span all drain pad X positions."""
+        labels = _labels_on_layer(result.cell, *LYR_MET1_LBL)
+        drn_xs = sorted(lb.origin[0] for lb in labels if lb.text == "D")
+        assert len(drn_xs) == 2
+
+        met1 = _polys_on_layer(result.cell, *LYR_MET1)
+        bus_found = any(
+            p.bounding_box()[0][0] <= drn_xs[0] + 0.001
+            and p.bounding_box()[1][0] >= drn_xs[-1] - 0.001
+            for p in met1
+        )
+        assert bus_found, "No met1 bus bar spanning all drain X positions"
+
+    def test_single_finger_no_bus(self, gen):
+        """1-finger device should not add extra met1 for bus bars."""
+        r_1f = gen.generate(
+            {"device_type": "pmos", "w_um": 1.0, "l_um": 0.15, "fingers": 1}
+        )
+        met1_1f = len(_polys_on_layer(r_1f.cell, *LYR_MET1))
+        # 1-finger: 2 S/D pads + 2 gate pads (both) + 1 body = 5
+        # No bus bars or vertical drops
+        assert met1_1f == 5
+
+
+# ---------------------------------------------------------------------------
+# 2-finger NMOS
+# ---------------------------------------------------------------------------
+class TestMultiFingerNMOS:
+    """Test: 2-finger NMOS → verify S/D bus routing and connectivity."""
+
+    @pytest.fixture
+    def result(self, gen):
+        return gen.generate(
+            {"device_type": "nmos", "w_um": 0.42, "l_um": 0.15, "fingers": 2}
+        )
+
+    def test_three_sd_regions(self, result):
+        """2 fingers → 3 S/D regions (S, D, S)."""
+        assert result.metadata["n_sd_regions"] == 3
+
+    def test_source_bus_present(self, result):
+        """Source bus met1 spans both source pad X positions."""
+        labels = _labels_on_layer(result.cell, *LYR_MET1_LBL)
+        src_xs = sorted(lb.origin[0] for lb in labels if lb.text == "S")
+        assert len(src_xs) == 2
+
+        met1 = _polys_on_layer(result.cell, *LYR_MET1)
+        bus_found = any(
+            p.bounding_box()[0][0] <= src_xs[0] + 0.001
+            and p.bounding_box()[1][0] >= src_xs[-1] - 0.001
+            for p in met1
+        )
+        assert bus_found, "No met1 bus bar spanning all source X positions"
+
+    def test_has_nsdm_no_nwell(self, result):
+        nsdm = _polys_on_layer(result.cell, *LYR_NSDM)
+        nwell = _polys_on_layer(result.cell, *LYR_NWELL)
+        assert len(nsdm) == 1, "NMOS should have nsdm implant"
+        assert len(nwell) == 0, "NMOS should not have nwell"
+
+    def test_cell_is_valid_gdstk(self, result, tmp_path):
+        """Verify the cell can be written to a GDS file without error."""
+        lib = gdstk.Library()
+        lib.add(result.cell)
+        out = tmp_path / "test_2f_nmos.gds"
+        lib.write_gds(str(out))
+        assert out.stat().st_size > 0
+
 
 # ---------------------------------------------------------------------------
 # Edge cases

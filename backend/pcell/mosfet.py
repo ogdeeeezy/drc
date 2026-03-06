@@ -221,6 +221,15 @@ class MOSFETGenerator(PCellGenerator):
             sd_met1_bot = snap(sd_met1_bot - extend)
             sd_met1_top = snap(sd_met1_top + extend)
 
+        # Met1 S/D bus Y positions (multi-finger — needed for gate clearance)
+        if fingers > 1:
+            bus_w = r.met1_min_width
+            bus_half_w = snap(bus_w / 2)
+            src_bus_cy = snap(sd_met1_top + r.met1_min_spacing + bus_half_w)
+            drn_bus_cy = snap(sd_met1_bot - r.met1_min_spacing - bus_half_w)
+            src_bus_top = snap(src_bus_cy + bus_half_w)
+            drn_bus_bot = snap(drn_bus_cy - bus_half_w)
+
         # Gate met1 pad dimensions
         met1_gc_half = snap(
             max(r.met1_min_width, r.mcon_size + 2 * r.met1_enc_mcon_adj) / 2
@@ -235,12 +244,15 @@ class MOSFETGenerator(PCellGenerator):
             gc_m1_half_y = snap(min_area / gc_m1_w / 2 + r.grid)
 
         # Push gate contacts far enough for m1.2 clearance to S/D met1
+        # Multi-finger: clear source bus (top) / drain bus (bottom)
         gc_cy_top_natural = snap(diff_h + r.licon_enc_by_poly + r.licon_size / 2)
-        min_gc_cy_top = snap(sd_met1_top + r.met1_min_spacing + gc_m1_half_y)
+        m1_ref_top = src_bus_top if fingers > 1 else sd_met1_top
+        min_gc_cy_top = snap(m1_ref_top + r.met1_min_spacing + gc_m1_half_y)
         gc_cy_top = snap(max(gc_cy_top_natural, min_gc_cy_top))
 
         gc_cy_bot_natural = snap(-(r.licon_enc_by_poly + r.licon_size / 2))
-        max_gc_cy_bot = snap(sd_met1_bot - r.met1_min_spacing - gc_m1_half_y)
+        m1_ref_bot = drn_bus_bot if fingers > 1 else sd_met1_bot
+        max_gc_cy_bot = snap(m1_ref_bot - r.met1_min_spacing - gc_m1_half_y)
         gc_cy_bot = snap(min(gc_cy_bot_natural, max_gc_cy_bot))
 
         # Poly extension for gate contacts (dynamic, based on actual gc positions)
@@ -413,6 +425,41 @@ class MOSFETGenerator(PCellGenerator):
                 cell.add(gdstk.Label(
                     "G", (poly_cx, gc_cy_bot),
                     layer=LYR_MET1_LBL[0], texttype=LYR_MET1_LBL[1],
+                ))
+
+        # 7b. Met1 S/D bus routing (multi-finger only) ----------------------------
+        if fingers > 1:
+            src_regions = [(cx, s) for cx, s in sd_regions if s]
+            drn_regions = [(cx, s) for cx, s in sd_regions if not s]
+
+            # Source bus: horizontal strip spanning all source pad X positions
+            src_xs = [cx for cx, _ in src_regions]
+            cell.add(gdstk.rectangle(
+                (snap(min(src_xs) - met1_sd_half_x), snap(src_bus_cy - bus_half_w)),
+                (snap(max(src_xs) + met1_sd_half_x), snap(src_bus_cy + bus_half_w)),
+                layer=LYR_MET1[0], datatype=LYR_MET1[1],
+            ))
+            # Vertical drops from bus to each source pad
+            for cx, _ in src_regions:
+                cell.add(gdstk.rectangle(
+                    (snap(cx - met1_sd_half_x), sd_met1_top),
+                    (snap(cx + met1_sd_half_x), snap(src_bus_cy + bus_half_w)),
+                    layer=LYR_MET1[0], datatype=LYR_MET1[1],
+                ))
+
+            # Drain bus: horizontal strip below all drain pad X positions
+            drn_xs = [cx for cx, _ in drn_regions]
+            cell.add(gdstk.rectangle(
+                (snap(min(drn_xs) - met1_sd_half_x), snap(drn_bus_cy - bus_half_w)),
+                (snap(max(drn_xs) + met1_sd_half_x), snap(drn_bus_cy + bus_half_w)),
+                layer=LYR_MET1[0], datatype=LYR_MET1[1],
+            ))
+            # Vertical drops from each drain pad down to bus
+            for cx, _ in drn_regions:
+                cell.add(gdstk.rectangle(
+                    (snap(cx - met1_sd_half_x), snap(drn_bus_cy - bus_half_w)),
+                    (snap(cx + met1_sd_half_x), sd_met1_bot),
+                    layer=LYR_MET1[0], datatype=LYR_MET1[1],
                 ))
 
         # 8. Implant layers -------------------------------------------------------
