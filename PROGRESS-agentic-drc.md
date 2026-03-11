@@ -1,6 +1,25 @@
 # PROGRESS-agentic-drc
 
-> Sessions 1-18 archived → `docs/archive/archive-progress-agentic-drc.md`
+> Sessions 1-19 archived → `docs/archive/archive-progress-agentic-drc.md`
+
+---
+
+## Session 22: 2026-03-10 — DRC marker visualization diagnosis + plan
+
+### Done
+- **Diagnosed marker navigation bug** — User reported m1.2 violations (5 markers) show no errors at listed coordinates. Root cause: frontend zooms to combined bbox of all markers, no individual marker rectangles rendered on layout.
+- **Full coordinate chain traced** — DRC deck → .lyrdb edge-pair XML → violation_parser.py → API response → frontend. Data is correct; visualization is the gap.
+- **Implementation plan designed** — WebGLRenderer marker rectangles, per-marker zoom navigation (prev/next), ViolationList expansion, overlay "Marker N of M" display. Plan at `~/.claude/plans/cryptic-snuggling-goose.md`.
+
+### Decisions
+- Markers rendered as filled rectangles in WebGL (not CSS overlay) so they pan/zoom with layout
+- Zoom to individual marker bbox (not combined), auto-select first marker on violation click
+
+### Next
+- Implement marker visualization plan (5 files: WebGLRenderer, LayoutViewer, ViolationList, ViolationOverlay, App.tsx)
+- Commit + verify multi-finger LVS (bus routing still uncommitted from Session 21)
+- Monte Carlo optimization
+- LLM-assisted DRC deck generator
 
 ---
 
@@ -41,20 +60,3 @@
 
 ### Next
 - Multi-finger LVS (done in Session 21)
-
----
-
-## Session 19: 2026-03-05 — Full LVS E2E verified
-
-### Done
-- **LVS E2E flow verified** — Generate PCell → upload GDS → DRC (0 violations) → upload SPICE netlist → run LVS → **match** (1 device, 4 nets). Both NMOS and PMOS single-finger pass clean.
-- **Substrate taps added to PCells** — ptap for NMOS, ntap for PMOS. Full contact stack (tap → licon → li1 → mcon → met1 with "B" label). Placed left of diff with 0.130 µm implant clearance.
-- **LVS deck device class mapping** — Added `same_device_classes("NMOS", "SKY130_FD_PR__NFET_01V8")` and PMOS equivalent.
-- **Tests updated** — Implant assertions updated for tap presence. 730 tests, 95% coverage.
-
-### Decisions
-- Substrate tap placed LEFT of diffusion (not below) to avoid gate contact conflicts
-- Implant gap = 0.130 µm between nsdm/psdm edges (matches difftap.10)
-
-### Next
-- Deploy to VPS (done in Session 20)

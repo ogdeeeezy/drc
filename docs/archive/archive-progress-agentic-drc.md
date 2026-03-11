@@ -2,6 +2,27 @@
 
 ---
 
+## Archived: 2026-03-10 | Git: 40a5b7b
+
+### Removed Session: Session 19
+
+## Session 19: 2026-03-05 — Full LVS E2E verified
+
+### Done
+- **LVS E2E flow verified** — Generate PCell → upload GDS → DRC (0 violations) → upload SPICE netlist → run LVS → **match** (1 device, 4 nets). Both NMOS and PMOS single-finger pass clean.
+- **Substrate taps added to PCells** — ptap for NMOS, ntap for PMOS. Full contact stack (tap → licon → li1 → mcon → met1 with "B" label). Placed left of diff with 0.130 µm implant clearance.
+- **LVS deck device class mapping** — Added `same_device_classes("NMOS", "SKY130_FD_PR__NFET_01V8")` and PMOS equivalent.
+- **Tests updated** — Implant assertions updated for tap presence. 730 tests, 95% coverage.
+
+### Decisions
+- Substrate tap placed LEFT of diffusion (not below) to avoid gate contact conflicts
+- Implant gap = 0.130 µm between nsdm/psdm edges (matches difftap.10)
+
+### Next
+- Deploy to VPS (done in Session 20)
+
+---
+
 ## Archived: 2026-03-06 | Git: 5494e34
 
 ### Session 18: 2026-03-05 — LVS deck fix + end-to-end testing
