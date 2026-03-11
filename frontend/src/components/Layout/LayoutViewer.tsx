@@ -12,11 +12,16 @@ interface Props {
   selectedMarkerIndex: number | null;
 }
 
+/** Minimum zoom box size in microns — keeps markers visible in context */
+const MIN_ZOOM_SPAN = 3;
+
 export function LayoutViewer({ layout, hiddenLayers, selectedViolation, selectedMarkerIndex }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<WebGLRenderer | null>(null);
   const isDragging = useRef(false);
   const lastPos = useRef({ x: 0, y: 0 });
+  const hiddenLayersRef = useRef(hiddenLayers);
+  hiddenLayersRef.current = hiddenLayers;
 
   // Initialize renderer
   useEffect(() => {
@@ -58,13 +63,12 @@ export function LayoutViewer({ layout, hiddenLayers, selectedViolation, selected
     const idx = selectedMarkerIndex ?? 0;
     const targetBbox = geometries.length > 0 ? geometries[idx]?.bbox ?? selectedViolation.bbox : selectedViolation.bbox;
 
-    const margin = Math.max(targetBbox[2] - targetBbox[0], targetBbox[3] - targetBbox[1]) * 2;
-    renderer.zoomToBox([
-      targetBbox[0] - margin,
-      targetBbox[1] - margin,
-      targetBbox[2] + margin,
-      targetBbox[3] + margin,
-    ]);
+    // Ensure minimum zoom span so tiny markers are visible in context
+    const cx = (targetBbox[0] + targetBbox[2]) / 2;
+    const cy = (targetBbox[1] + targetBbox[3]) / 2;
+    const halfW = Math.max((targetBbox[2] - targetBbox[0]) / 2, MIN_ZOOM_SPAN / 2);
+    const halfH = Math.max((targetBbox[3] - targetBbox[1]) / 2, MIN_ZOOM_SPAN / 2);
+    renderer.zoomToBox([cx - halfW, cy - halfH, cx + halfW, cy + halfH]);
 
     if (geometries.length > 0) {
       renderer.setMarkers(geometries, selectedMarkerIndex ?? 0);
@@ -79,11 +83,11 @@ export function LayoutViewer({ layout, hiddenLayers, selectedViolation, selected
       if (!canvas || !rendererRef.current) return;
       const rect = canvas.parentElement!.getBoundingClientRect();
       rendererRef.current.resize(rect.width, rect.height);
-      rendererRef.current.render(hiddenLayers);
+      rendererRef.current.render(hiddenLayersRef.current);
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [hiddenLayers]);
+  }, []);
 
   // Mouse handlers for pan
   const onMouseDown = useCallback((e: React.MouseEvent) => {
@@ -114,20 +118,25 @@ export function LayoutViewer({ layout, hiddenLayers, selectedViolation, selected
     rendererRef.current.render(hiddenLayers);
   }, [hiddenLayers]);
 
-  // Scroll wheel for zoom
-  const onWheel = useCallback(
-    (e: React.WheelEvent) => {
-      if (!rendererRef.current || !canvasRef.current) return;
+  // Scroll/pinch wheel for zoom — must be non-passive to prevent browser zoom
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      if (!rendererRef.current) return;
       e.preventDefault();
-      const rect = canvasRef.current.getBoundingClientRect();
+      const rect = canvas.getBoundingClientRect();
       const cx = e.clientX - rect.left;
       const cy = rect.height - (e.clientY - rect.top); // flip Y
       const factor = e.deltaY > 0 ? 0.9 : 1.1;
       rendererRef.current.zoom(factor, cx, cy);
-      rendererRef.current.render(hiddenLayers);
-    },
-    [hiddenLayers]
-  );
+      rendererRef.current.render(hiddenLayersRef.current);
+    };
+
+    canvas.addEventListener("wheel", handleWheel, { passive: false });
+    return () => canvas.removeEventListener("wheel", handleWheel);
+  }, []);
 
   return (
     <canvas
@@ -138,7 +147,6 @@ export function LayoutViewer({ layout, hiddenLayers, selectedViolation, selected
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
       onDoubleClick={onDoubleClick}
-      onWheel={onWheel}
     />
   );
 }
