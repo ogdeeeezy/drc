@@ -9,24 +9,19 @@ Open-source DRC tool — PVS alternative for semiconductor layout verification. 
 - **GitHub**: https://github.com/ogdeeeezy/drc — all pushed to main
 - **LVS fully working**: Single-finger NMOS + PMOS DRC-clean and LVS-match verified E2E
 - **Multi-finger bus routing**: Met1 bus bars implemented (uncommitted) — connects S/D pads for LVS
+- **Marker visualization**: Implemented (uncommitted) — WebGL red rectangles, per-marker zoom/navigation
 - **DEPLOYED**: https://sky130drc.duckdns.org — live with auto-SSL via Caddy
 
-## Immediate Next — Marker Visualization (TOP PRIORITY)
-User-reported bug: clicking DRC violations (e.g., m1.2) zooms to combined bbox of all markers but shows NO visual markers on layout. Root cause diagnosed, implementation plan ready.
-
-**Plan file**: `~/.claude/plans/cryptic-snuggling-goose.md`
-
-**Summary of changes needed** (5 frontend files, backend unchanged):
-1. `WebGLRenderer.ts` — Add `setMarkers()` to render filled red rectangles at each marker bbox
-2. `LayoutViewer.tsx` — Zoom to individual marker bbox, pass markers to renderer
-3. `ViolationList.tsx` — Add prev/next marker navigation below selected violation
-4. `ViolationOverlay.tsx` — Show "Marker N of M" when navigating
-5. `App.tsx` — Add `selectedMarkerIndex` state, wire through props
+## Immediate Next — Commit & Verify
+1. Commit marker visualization (5 frontend files, builds clean)
+2. Test in browser: upload GDS, run DRC, click violation → verify red markers visible + Prev/Next navigation
+3. Commit multi-finger bus routing (backend/pcell/mosfet.py, uncommitted from Session 21)
+4. Redeploy to VPS
 
 ## How to Run
 - **Production**: https://sky130drc.duckdns.org
 - **Redeploy**: `ssh root@104.156.154.153 "cd /opt/drc && git pull && docker compose up -d --build"`
-- **Local dev**: `make run` (backend 8000) + `make frontend` (Vite 5173)
+- **Local dev**: `make run` (backend 8000) + `cd frontend && npx vite` (Vite 5173)
 - **Tests**: `.venv/bin/python -m pytest tests/unit/ -q --cov=backend` (737 tests, 95%)
 
 ## VPS Details
@@ -36,9 +31,10 @@ User-reported bug: clicking DRC violations (e.g., m1.2) zooms to combined bbox o
 - **Repo on VPS**: `/opt/drc`
 
 ## Hot Files
-- `frontend/src/components/Layout/WebGLRenderer.ts` — Needs marker rendering added
-- `frontend/src/components/Layout/LayoutViewer.tsx` — Needs per-marker zoom
-- `frontend/src/components/DRC/ViolationList.tsx` — Needs marker sub-navigation
+- `frontend/src/App.tsx` — selectedMarkerIndex state wiring (just modified)
+- `frontend/src/components/Layout/WebGLRenderer.ts` — setMarkers/clearMarkers (just modified)
+- `frontend/src/components/Layout/LayoutViewer.tsx` — per-marker zoom (just modified)
+- `frontend/src/components/DRC/ViolationList.tsx` — Prev/Next marker navigation (just modified)
 - `backend/pcell/mosfet.py` — Met1 bus routing (uncommitted from Session 21)
 
 ## Gotchas
@@ -47,4 +43,4 @@ User-reported bug: clicking DRC violations (e.g., m1.2) zooms to combined bbox o
 - .lvsdb format is NOT XML — S-expression text (custom parser in lvs_parser.py)
 - DRC deck rule descriptions can lie — via2.5 says "m3 enclosure" but checks m2
 - Docker healthcheck uses Python urllib (not curl — python:3.12-slim doesn't have curl)
-- WebGL renderer uses single shader program with `gl.TRIANGLES` — markers should use same pattern (not LINES, line width unreliable)
+- WebGL renderer uses single shader program with `gl.TRIANGLES` — markers use same pattern

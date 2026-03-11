@@ -1,6 +1,22 @@
 # PROGRESS-agentic-drc
 
-> Sessions 1-19 archived → `docs/archive/archive-progress-agentic-drc.md`
+> Sessions 1-20 archived → `docs/archive/archive-progress-agentic-drc.md`
+
+---
+
+## Session 23: 2026-03-10 — DRC marker visualization implementation
+
+### Done
+- **Marker visualization implemented** (uncommitted) — Red filled rectangles rendered in WebGL at each marker bbox. Selected marker bright (0.6 alpha), others dim (0.25 alpha). Zoom targets individual marker bbox instead of combined violation bbox.
+- **Per-marker navigation** — Prev/Next buttons in ViolationList cycle through markers with wrap-around. "Marker N of M" displayed in both ViolationList and ViolationOverlay.
+- **5 files changed** — WebGLRenderer (setMarkers/clearMarkers), LayoutViewer (per-marker zoom), ViolationList (nav UI), ViolationOverlay (marker info), App.tsx (selectedMarkerIndex state).
+- **Frontend builds clean** — TypeScript `--noEmit` and Vite production build pass with 0 errors.
+
+### Next
+- Commit marker visualization + test in browser with real DRC violations
+- Commit + redeploy multi-finger bus routing (uncommitted from Session 21)
+- Monte Carlo optimization
+- LLM-assisted DRC deck generator
 
 ---
 
@@ -16,10 +32,7 @@
 - Zoom to individual marker bbox (not combined), auto-select first marker on violation click
 
 ### Next
-- Implement marker visualization plan (5 files: WebGLRenderer, LayoutViewer, ViolationList, ViolationOverlay, App.tsx)
-- Commit + verify multi-finger LVS (bus routing still uncommitted from Session 21)
-- Monte Carlo optimization
-- LLM-assisted DRC deck generator
+- Implement marker visualization plan (done in Session 23)
 
 ---
 
@@ -36,27 +49,3 @@
 
 ### Next
 - Commit + redeploy multi-finger bus routing
-- Generate 4-finger NMOS/PMOS via API and run DRC — verify 0 violations
-- Upload multi-finger GDS + SPICE netlist, run LVS — verify match
-- Monte Carlo optimization
-- LLM-assisted DRC deck generator
-
----
-
-## Session 20: 2026-03-05 — Deployed to VPS + production bugfixes
-
-### Done
-- **Deployed to production** (`614a181`) — Live at https://sky130drc.duckdns.org with auto-SSL via Caddy
-- **Static file serving + CORS** — FastAPI serves `frontend/dist` at `/` with SPA catch-all, production domain in CORS
-- **.dockerignore + feedback button** — Docker context trimmed, "Give Feedback" → GitHub Issues
-- **Docker healthcheck fixed** — Replaced `curl` with Python `urllib` (curl not in python:3.12-slim)
-- **DRC polling fix** (`ac8558e`) — Frontend was calling getViolations immediately after async runDRC. Added 2s polling loop matching LVS pattern.
-- **Viewport clamping** (`2b2edd9`) — Pan clamped so 20% of viewport always overlaps layout bbox. Zoom bounded 0.1x–100x of fit. Double-click resets view.
-
-### Decisions
-- Static files mounted as `/assets` + SPA catch-all at `/{path:path}` (avoids conflict with `/api` routes)
-- Caddy handles SSL termination — no cert management in app
-- Redeploy: `ssh root@104.156.154.153 "cd /opt/drc && git pull && docker compose up -d --build"`
-
-### Next
-- Multi-finger LVS (done in Session 21)

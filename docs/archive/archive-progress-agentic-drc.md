@@ -361,3 +361,27 @@
 - Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
 - LLM-assisted DRC deck generator — auto-generate rules from DRM tables
 - More PDKs — GF180, ASAP7 (solidify SKY130 framework first)
+
+---
+
+## Archived: 2026-03-10 | Git: e153f40
+
+### Removed Session: Session 20
+
+## Session 20: 2026-03-05 — Deployed to VPS + production bugfixes
+
+### Done
+- **Deployed to production** (`614a181`) — Live at https://sky130drc.duckdns.org with auto-SSL via Caddy
+- **Static file serving + CORS** — FastAPI serves `frontend/dist` at `/` with SPA catch-all, production domain in CORS
+- **.dockerignore + feedback button** — Docker context trimmed, "Give Feedback" → GitHub Issues
+- **Docker healthcheck fixed** — Replaced `curl` with Python `urllib` (curl not in python:3.12-slim)
+- **DRC polling fix** (`ac8558e`) — Frontend was calling getViolations immediately after async runDRC. Added 2s polling loop matching LVS pattern.
+- **Viewport clamping** (`2b2edd9`) — Pan clamped so 20% of viewport always overlaps layout bbox. Zoom bounded 0.1x–100x of fit. Double-click resets view.
+
+### Decisions
+- Static files mounted as `/assets` + SPA catch-all at `/{path:path}` (avoids conflict with `/api` routes)
+- Caddy handles SSL termination — no cert management in app
+- Redeploy: `ssh root@104.156.154.153 "cd /opt/drc && git pull && docker compose up -d --build"`
+
+### Next
+- Multi-finger LVS (done in Session 21)
