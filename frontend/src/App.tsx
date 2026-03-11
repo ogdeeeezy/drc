@@ -163,6 +163,25 @@ export function App() {
     setSelectedMarkerIndex(v ? 0 : null);
   }, []);
 
+  const handleReset = useCallback(() => {
+    setStage("upload");
+    setJobId(null);
+    setLayout(null);
+    setDrcResult(null);
+    setViolations(null);
+    setFixResult(null);
+    setLoading(false);
+    setError(null);
+    setHint(null);
+    setHiddenLayers(new Set());
+    setSelectedViolation(null);
+    setSelectedMarkerIndex(null);
+    setLvsResults(null);
+    setSelectedMismatch(null);
+    setNetlistUploaded(false);
+    setLvsRunning(false);
+  }, []);
+
   const toggleLayer = useCallback((key: string) => {
     setHiddenLayers((prev) => {
       const next = new Set(prev);
@@ -185,7 +204,10 @@ export function App() {
           gap: 16,
         }}
       >
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#e94560" }}>
+        <h1
+          onClick={handleReset}
+          style={{ fontSize: 18, fontWeight: 700, color: "#e94560", cursor: "pointer" }}
+        >
           Agentic DRC
         </h1>
 
