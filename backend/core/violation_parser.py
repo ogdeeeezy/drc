@@ -58,9 +58,9 @@ def _parse_value(value_str: str) -> ViolationGeometry | None:
 
     if value_str.startswith("edge-pair:"):
         content = value_str[len("edge-pair:") :].strip()
-        # Split on '/' to get two edges: (x1,y1;x2,y2)/(x3,y3;x4,y4)
-        # Each edge is in parentheses
-        halves = re.split(r"\)\s*/\s*\(", content)
+        # Split on '/' or '|' to get two edges: (x1,y1;x2,y2)/(x3,y3;x4,y4)
+        # KLayout uses '/' or '|' as separator depending on the rule
+        halves = re.split(r"\)\s*[/|]\s*\(", content)
         if len(halves) != 2:
             return None
         edge1 = _parse_edge(halves[0])
