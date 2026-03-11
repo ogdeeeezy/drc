@@ -8,11 +8,13 @@ interface Props {
   violations: Violation[];
   selected: Violation | null;
   onSelect: (v: Violation | null) => void;
+  selectedMarkerIndex: number | null;
+  onSelectMarker: (idx: number | null) => void;
 }
 
 type SortKey = "severity" | "count" | "category";
 
-export function ViolationList({ violations, selected, onSelect }: Props) {
+export function ViolationList({ violations, selected, onSelect, selectedMarkerIndex, onSelectMarker }: Props) {
   const [sortBy, setSortBy] = useState<SortKey>("severity");
 
   const sorted = [...violations].sort((a, b) => {
@@ -107,6 +109,58 @@ export function ViolationList({ violations, selected, onSelect }: Props) {
               {v.rule_type && <span>{v.rule_type}</span>}
               {v.value_um != null && <span>{v.value_um} um</span>}
             </div>
+            {isSelected && v.geometries.length > 1 && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginTop: 6,
+                  paddingTop: 6,
+                  borderTop: "1px solid #333",
+                }}
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const idx = selectedMarkerIndex ?? 0;
+                    onSelectMarker(idx > 0 ? idx - 1 : v.geometries.length - 1);
+                  }}
+                  style={{
+                    background: "#0f3460",
+                    color: "#ccc",
+                    border: "1px solid #333",
+                    borderRadius: 4,
+                    padding: "2px 8px",
+                    fontSize: 11,
+                    cursor: "pointer",
+                  }}
+                >
+                  Prev
+                </button>
+                <span style={{ fontSize: 11, color: "#999" }}>
+                  Marker {(selectedMarkerIndex ?? 0) + 1} of {v.geometries.length}
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const idx = selectedMarkerIndex ?? 0;
+                    onSelectMarker(idx < v.geometries.length - 1 ? idx + 1 : 0);
+                  }}
+                  style={{
+                    background: "#0f3460",
+                    color: "#ccc",
+                    border: "1px solid #333",
+                    borderRadius: 4,
+                    padding: "2px 8px",
+                    fontSize: 11,
+                    cursor: "pointer",
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            )}
           </div>
         );
       })}

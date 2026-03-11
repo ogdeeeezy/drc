@@ -8,12 +8,14 @@ interface Props {
   violations: Violation[];
   layoutBbox: number[];
   selectedViolation: Violation | null;
+  selectedMarkerIndex: number | null;
 }
 
 export function ViolationOverlay({
   violations,
   layoutBbox: _layoutBbox,
   selectedViolation,
+  selectedMarkerIndex,
 }: Props) {
   // Render summary badge in top-right of the viewer
   const total = violations.reduce((sum, v) => sum + v.count, 0);
@@ -56,6 +58,11 @@ export function ViolationOverlay({
             <div style={{ fontSize: 10, color: "#888" }}>
               {selectedViolation.description}
             </div>
+            {selectedMarkerIndex != null && selectedViolation.geometries.length > 0 && (
+              <div style={{ fontSize: 10, color: "#e94560", marginTop: 4, fontWeight: 600 }}>
+                Marker {selectedMarkerIndex + 1} of {selectedViolation.geometries.length}
+              </div>
+            )}
           </div>
         )}
       </div>

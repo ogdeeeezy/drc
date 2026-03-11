@@ -3,7 +3,7 @@
  * Uses earcut for polygon triangulation.
  */
 import earcut from "earcut";
-import type { LayerData } from "../../api/client";
+import type { LayerData, ViolationGeometry } from "../../api/client";
 
 interface Camera {
   x: number;
@@ -16,6 +16,12 @@ interface LayerBuffer {
   vertexCount: number;
   color: [number, number, number, number];
   key: string;
+}
+
+interface MarkerBuffer {
+  vertexBuffer: WebGLBuffer;
+  vertexCount: number;
+  color: [number, number, number, number];
 }
 
 const VERTEX_SHADER = `
@@ -85,6 +91,7 @@ export class WebGLRenderer {
   private gl: WebGLRenderingContext;
   private program: WebGLProgram;
   private layerBuffers: LayerBuffer[] = [];
+  private markerBuffers: MarkerBuffer[] = [];
   private camera: Camera = { x: 0, y: 0, zoom: 1 };
   private bbox: number[] = [0, 0, 1, 1];
   private width: number;
@@ -225,6 +232,39 @@ export class WebGLRenderer {
     this.camera.y = ymin - (this.height / this.camera.zoom - h) / 2;
   }
 
+  setMarkers(geometries: ViolationGeometry[], selectedIdx: number | null) {
+    this.clearMarkers();
+    const gl = this.gl;
+
+    for (let i = 0; i < geometries.length; i++) {
+      const [xmin, ymin, xmax, ymax] = geometries[i].bbox;
+      // Two triangles forming a filled rectangle
+      const vertices = new Float32Array([
+        xmin, ymin, xmax, ymin, xmax, ymax,
+        xmin, ymin, xmax, ymax, xmin, ymax,
+      ]);
+
+      const buffer = gl.createBuffer()!;
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+      const color: [number, number, number, number] =
+        i === selectedIdx
+          ? [233 / 255, 69 / 255, 96 / 255, 0.6]
+          : [233 / 255, 69 / 255, 96 / 255, 0.25];
+
+      this.markerBuffers.push({ vertexBuffer: buffer, vertexCount: 6, color });
+    }
+  }
+
+  clearMarkers() {
+    const gl = this.gl;
+    for (const mb of this.markerBuffers) {
+      gl.deleteBuffer(mb.vertexBuffer);
+    }
+    this.markerBuffers = [];
+  }
+
   render(hiddenLayers: Set<string>) {
     const gl = this.gl;
     gl.viewport(0, 0, this.width, this.height);
@@ -245,6 +285,15 @@ export class WebGLRenderer {
       gl.uniform4fv(this.uColor, lb.color);
       gl.drawArrays(gl.TRIANGLES, 0, lb.vertexCount);
     }
+
+    // Draw marker rectangles on top
+    for (const mb of this.markerBuffers) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, mb.vertexBuffer);
+      gl.enableVertexAttribArray(this.aPosition);
+      gl.vertexAttribPointer(this.aPosition, 2, gl.FLOAT, false, 0, 0);
+      gl.uniform4fv(this.uColor, mb.color);
+      gl.drawArrays(gl.TRIANGLES, 0, mb.vertexCount);
+    }
   }
 
   getCamera(): Camera {
@@ -252,6 +301,7 @@ export class WebGLRenderer {
   }
 
   destroy() {
+    this.clearMarkers();
     const gl = this.gl;
     for (const lb of this.layerBuffers) {
       gl.deleteBuffer(lb.vertexBuffer);

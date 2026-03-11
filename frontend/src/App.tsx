@@ -32,6 +32,7 @@ export function App() {
   const [selectedViolation, setSelectedViolation] = useState<Violation | null>(
     null
   );
+  const [selectedMarkerIndex, setSelectedMarkerIndex] = useState<number | null>(null);
   const [lvsResults, setLvsResults] = useState<LVSResultsResponse | null>(null);
   const [selectedMismatch, setSelectedMismatch] = useState<LVSMismatch | null>(
     null
@@ -156,6 +157,11 @@ export function App() {
       setLvsRunning(false);
     }
   }, [jobId]);
+
+  const handleSelectViolation = useCallback((v: Violation | null) => {
+    setSelectedViolation(v);
+    setSelectedMarkerIndex(v ? 0 : null);
+  }, []);
 
   const toggleLayer = useCallback((key: string) => {
     setHiddenLayers((prev) => {
@@ -300,12 +306,14 @@ export function App() {
                 layout={layout}
                 hiddenLayers={hiddenLayers}
                 selectedViolation={selectedViolation}
+                selectedMarkerIndex={selectedMarkerIndex}
               />
               {violations && (
                 <ViolationOverlay
                   violations={violations.violations}
                   layoutBbox={layout.bbox}
                   selectedViolation={selectedViolation}
+                  selectedMarkerIndex={selectedMarkerIndex}
                 />
               )}
             </>
@@ -346,7 +354,9 @@ export function App() {
               <ViolationList
                 violations={violations.violations}
                 selected={selectedViolation}
-                onSelect={setSelectedViolation}
+                onSelect={handleSelectViolation}
+                selectedMarkerIndex={selectedMarkerIndex}
+                onSelectMarker={setSelectedMarkerIndex}
               />
             ) : null}
           </div>

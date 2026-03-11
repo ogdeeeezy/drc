@@ -9,9 +9,10 @@ interface Props {
   layout: LayoutData;
   hiddenLayers: Set<string>;
   selectedViolation: Violation | null;
+  selectedMarkerIndex: number | null;
 }
 
-export function LayoutViewer({ layout, hiddenLayers, selectedViolation }: Props) {
+export function LayoutViewer({ layout, hiddenLayers, selectedViolation, selectedMarkerIndex }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<WebGLRenderer | null>(null);
   const isDragging = useRef(false);
@@ -42,19 +43,34 @@ export function LayoutViewer({ layout, hiddenLayers, selectedViolation }: Props)
     rendererRef.current?.render(hiddenLayers);
   }, [hiddenLayers]);
 
-  // Zoom to selected violation
+  // Zoom to selected violation/marker and render marker rectangles
   useEffect(() => {
-    if (!selectedViolation || !rendererRef.current) return;
-    const bbox = selectedViolation.bbox;
-    const margin = Math.max(bbox[2] - bbox[0], bbox[3] - bbox[1]) * 2;
-    rendererRef.current.zoomToBox([
-      bbox[0] - margin,
-      bbox[1] - margin,
-      bbox[2] + margin,
-      bbox[3] + margin,
+    const renderer = rendererRef.current;
+    if (!renderer) return;
+
+    if (!selectedViolation) {
+      renderer.clearMarkers();
+      renderer.render(hiddenLayers);
+      return;
+    }
+
+    const geometries = selectedViolation.geometries;
+    const idx = selectedMarkerIndex ?? 0;
+    const targetBbox = geometries.length > 0 ? geometries[idx]?.bbox ?? selectedViolation.bbox : selectedViolation.bbox;
+
+    const margin = Math.max(targetBbox[2] - targetBbox[0], targetBbox[3] - targetBbox[1]) * 2;
+    renderer.zoomToBox([
+      targetBbox[0] - margin,
+      targetBbox[1] - margin,
+      targetBbox[2] + margin,
+      targetBbox[3] + margin,
     ]);
-    rendererRef.current.render(hiddenLayers);
-  }, [selectedViolation, hiddenLayers]);
+
+    if (geometries.length > 0) {
+      renderer.setMarkers(geometries, selectedMarkerIndex ?? 0);
+    }
+    renderer.render(hiddenLayers);
+  }, [selectedViolation, selectedMarkerIndex, hiddenLayers]);
 
   // Handle resize
   useEffect(() => {
