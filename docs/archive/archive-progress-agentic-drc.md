@@ -385,3 +385,23 @@
 
 ### Next
 - Multi-finger LVS (done in Session 21)
+
+---
+
+## Archived: 2026-03-11 | Git: f83133d
+
+### Removed Session: Session 21
+
+## Session 21: 2026-03-06 — Multi-finger met1 S/D bus routing
+
+### Done
+- **Met1 bus bars for multi-finger LVS** (uncommitted) — Source bus above S/D pads, drain bus below. Horizontal bars span all same-terminal pad X positions. Vertical drops connect each pad to its bus. Single-finger devices unchanged.
+- **Gate contact clearance updated** — Gate met1 pads now clear bus bars (not just S/D pads) with m1.2 spacing for multi-finger devices.
+- **Tests added** — 3 new tests in `TestMultiFingerPMOS` (source bus, drain bus, single-finger no bus) + new `TestMultiFingerNMOS` class (4 tests). 41 mosfet tests, 737 total, all passing.
+
+### Decisions
+- Bus width = `met1_min_width` (0.140 µm), gap = `met1_min_spacing` (0.140 µm)
+- Bus Y positions computed before gate contact placement so clearance accounts for bus metal
+
+### Next
+- Commit + redeploy multi-finger bus routing
