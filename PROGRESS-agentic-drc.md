@@ -1,6 +1,30 @@
 # PROGRESS-agentic-drc
 
-> Sessions 1-21 archived → `docs/archive/archive-progress-agentic-drc.md`
+> Sessions 1-22 archived → `docs/archive/archive-progress-agentic-drc.md`
+
+---
+
+## Session 24: 2026-03-11 — Three-tier PDK knowledge system
+
+### Done
+- **PDK knowledge layer** — Created `KnowledgeBase` class (`backend/pdk/knowledge.py`) that assembles universal + PDK-specific knowledge files for LLM-assisted features.
+- **Universal knowledge docs** — `drc-universal.md` (grid precision, boolean ops, fix confidence, KLayout quirks, LVS universals) + `rule-taxonomy.md` (rule types, fix priority, confidence calibration).
+- **SKY130 knowledge doc** — `sky130-knowledge.md` with DRM errata, device class mappings, contact stack, layer gotchas, multi-finger spacing.
+- **Schema extension** — Added `drc_flags`, `device_classes`, `layer_stack` optional fields to `PDKConfig` in `schema.py`. Backward compatible (all default None).
+- **DRC runner flag resolution** — `build_command()` now prefers `pdk.drc_flags` over hardcoded `DEFAULT_DRC_FLAGS`, with per-call override support.
+- **Singleton accessor** — `get_knowledge_base()` in `deps.py` (same pattern as `get_pdk_registry()`).
+- **25 new tests** — `test_knowledge.py` (11), `test_schema_extended.py` (10), `test_drc_runner_flags.py` (4). All pass. 762 total tests, 0 regressions.
+- **Docs updated** — `pdk-authoring.md` now documents new fields, knowledge.md template, and updated checklist.
+
+### Decisions
+- Knowledge files are Markdown (not JSON) — optimized for LLM context injection, easy to author
+- Flag priority: per-call override > pdk.drc_flags > DEFAULT_DRC_FLAGS — preserves backward compat
+- `task` param in `get_context()` reserved for future filtering but currently passes all content
+
+### Next
+- Wire `KnowledgeBase.get_context()` into LLM-assisted deck generation pipeline
+- Monte Carlo optimization
+- More PDKs (GF180, ASAP7) — adding a PDK now means adding files, not code
 
 ---
 
