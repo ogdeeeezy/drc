@@ -4,16 +4,18 @@ How to add a new PDK to Agentic DRC.
 
 ## What You Need
 
-Adding a PDK requires exactly **two files** in `backend/pdk/configs/<pdk_name>/`:
+Adding a PDK requires **three files** in `backend/pdk/configs/<pdk_name>/`:
 
 ```
 backend/pdk/configs/
-├── sky130/              ← existing reference
+├── sky130/                    ← existing reference
 │   ├── pdk.json
-│   └── sky130A_mr.drc
-└── <your_pdk>/          ← what you'll create
+│   ├── sky130A_mr.drc
+│   └── sky130-knowledge.md
+└── <your_pdk>/                ← what you'll create
     ├── pdk.json
-    └── <your_deck>.drc
+    ├── <your_deck>.drc
+    └── <your_pdk>-knowledge.md
 ```
 
 Everything else (runner, parser, fix engine, API, frontend) works automatically.
@@ -41,6 +43,9 @@ This is the machine-readable PDK config. It has 7 sections:
 | `process_node_nm` | int | Process node in nanometers |
 | `grid_um` | float | Manufacturing grid in microns |
 | `klayout_drc_deck` | string | Filename of the `.drc` script (same directory) |
+| `drc_flags` | object \| null | Per-PDK DRC deck flags (e.g. `{"feol": "true", "beol": "true"}`) |
+| `device_classes` | object \| null | LVS extraction name → schematic model (e.g. `{"NMOS": "nfet_01v8"}`) |
+| `layer_stack` | array \| null | Ordered layer names bottom to top (e.g. `["diff", "li1", "met1"]`) |
 
 ### Layers
 
@@ -272,7 +277,48 @@ layer.isolated(min_um, projection)        # isolated spacing (projection mode)
 
 Full API reference: https://www.klayout.de/doc-qt5/about/drc_ref.html
 
-## Step 3: Register and Test
+## Step 3: Create `<pdk_name>-knowledge.md`
+
+This is the human-readable knowledge file for LLM-assisted features (deck generation, fix explanation, triage). Place it alongside `pdk.json`.
+
+### Template
+
+```markdown
+# <PDK_NAME> PDK Knowledge
+
+Process-specific insights for <foundry> <PDK_NAME> (<node>nm).
+
+## DRC Deck Flag Defaults
+
+Describe which flags the DRC deck uses and their default values.
+
+## Known DRM Errata
+
+Document any discrepancies between the DRM documentation and actual deck behavior.
+
+## LVS Device Class Mappings
+
+| Extraction Class | Schematic Model | Notes |
+|-----------------|-----------------|-------|
+| NMOS | <model_name> | Standard NFET |
+| PMOS | <model_name> | Standard PFET |
+
+## Contact Stack Ordering
+
+List the layer stack bottom-to-top with GDS layer/datatype numbers.
+
+## Layer-Specific Gotchas
+
+Document per-layer quirks (exact-size requirements, unusual properties, etc.).
+
+## Grid and Snapping
+
+Note the manufacturing grid and any grid-related considerations.
+```
+
+See `backend/pdk/configs/sky130/sky130-knowledge.md` for a complete reference.
+
+## Step 4: Register and Test
 
 ### File Placement
 
@@ -341,6 +387,10 @@ Before shipping a new PDK:
 - [ ] Test GDS with clean layout produces zero violations
 - [ ] Colors are visually distinct in the viewer
 - [ ] Connectivity stack is complete (all via→metal connections)
+- [ ] `<pdk>-knowledge.md` created with DRM errata, layer gotchas, and device mappings
+- [ ] `drc_flags` set in pdk.json if the DRC deck uses flag parameters
+- [ ] `device_classes` set in pdk.json if LVS is supported
+- [ ] `layer_stack` set in pdk.json (ordered bottom to top)
 
 ## Reference: SKY130
 

@@ -82,6 +82,17 @@ class PDKConfig(BaseModel):
     klayout_lvs_deck: str | None = Field(
         default=None, description="Filename of KLayout LVS deck (optional)"
     )
+    drc_flags: dict[str, str] | None = Field(
+        default=None, description="Per-PDK DRC deck flags (e.g. feol, beol, offgrid)"
+    )
+    device_classes: dict[str, str] | None = Field(
+        default=None,
+        description="LVS extraction device class → schematic model mapping",
+    )
+    layer_stack: list[str] | None = Field(
+        default=None,
+        description="Ordered layer connectivity from bottom to top",
+    )
 
     def get_layer(self, name: str) -> GDSLayer:
         """Get layer by name, raise KeyError if not found."""

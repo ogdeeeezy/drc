@@ -5,6 +5,21 @@
   "grid_um": 0.005,
   "klayout_drc_deck": "sky130A_mr.drc",
   "klayout_lvs_deck": "sky130A.lvs",
+  "drc_flags": {
+    "feol": "true",
+    "beol": "true",
+    "offgrid": "true",
+    "seal": "true",
+    "floating_met": "true"
+  },
+  "device_classes": {
+    "NMOS": "sky130_fd_pr__nfet_01v8",
+    "PMOS": "sky130_fd_pr__pfet_01v8"
+  },
+  "layer_stack": [
+    "diff", "licon1", "li1", "mcon", "met1", "via", "met2",
+    "via2", "met3", "via3", "met4", "via4", "met5"
+  ],
   "layers": {
     "nwell": {
       "gds_layer": 64,

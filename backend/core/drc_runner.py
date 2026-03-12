@@ -135,6 +135,7 @@ class DRCRunner:
         top_cell: str | None = None,
         strategy: DRCStrategy | None = None,
         drc_flags: dict[str, str] | None = None,
+        pdk: PDKConfig | None = None,
     ) -> list[str]:
         """Build the klayout batch command.
 
@@ -142,6 +143,8 @@ class DRCRunner:
             klayout -b -r <deck.drc> -rd input=<gds> -rd report=<report.lyrdb>
                     [-rd topcell=<name>] [-rd thr=<n>] [-rd drc_mode=<mode>]
                     [-rd tile_size=<um>] [-rd feol=true] ...
+
+        Flag priority: per-call drc_flags > pdk.drc_flags > DEFAULT_DRC_FLAGS.
         """
         cmd = [
             self._binary,
@@ -160,8 +163,9 @@ class DRCRunner:
             cmd.extend(["-rd", f"drc_mode={strategy.mode}"])
             if strategy.mode == "tiled" and strategy.tile_size_um is not None:
                 cmd.extend(["-rd", f"tile_size={strategy.tile_size_um}"])
-        # Enable DRC rule groups (deck defaults all to false)
-        flags = {**self.DEFAULT_DRC_FLAGS, **(drc_flags or {})}
+        # Flag priority: per-call overrides > PDK-defined flags > class defaults
+        base_flags = (pdk.drc_flags if pdk and pdk.drc_flags else self.DEFAULT_DRC_FLAGS)
+        flags = {**base_flags, **(drc_flags or {})}
         for key, val in flags.items():
             cmd.extend(["-rd", f"{key}={val}"])
         return cmd
@@ -216,7 +220,7 @@ class DRCRunner:
 
         report_path = out_dir / f"{gds_path.stem}_drc.lyrdb"
 
-        cmd = self.build_command(gds_path, drc_deck_path, report_path, top_cell, strategy)
+        cmd = self.build_command(gds_path, drc_deck_path, report_path, top_cell, strategy, pdk=pdk)
 
         # Throttle CPU with layered approach:
         #   1. taskpolicy -b  — macOS background QoS (efficiency cores, lowest priority)
@@ -359,7 +363,7 @@ class DRCRunner:
 
         report_path = out_dir / f"{gds_path.stem}_drc.lyrdb"
 
-        cmd = self.build_command(gds_path, drc_deck_path, report_path, top_cell, strategy)
+        cmd = self.build_command(gds_path, drc_deck_path, report_path, top_cell, strategy, pdk=pdk)
 
         # Throttle CPU with layered approach
         import platform
