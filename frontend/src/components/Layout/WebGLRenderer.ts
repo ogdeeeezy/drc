@@ -300,6 +300,14 @@ export class WebGLRenderer {
     return { ...this.camera };
   }
 
+  /** Convert screen pixel coordinates to layout world coordinates (µm). */
+  screenToWorld(sx: number, sy: number): { x: number; y: number } {
+    return {
+      x: this.camera.x + sx / this.camera.zoom,
+      y: this.camera.y + sy / this.camera.zoom,
+    };
+  }
+
   destroy() {
     this.clearMarkers();
     const gl = this.gl;
