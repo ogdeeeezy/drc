@@ -58,11 +58,27 @@ export function ViolationOverlay({
             <div style={{ fontSize: 10, color: "#888" }}>
               {selectedViolation.description}
             </div>
-            {selectedMarkerIndex != null && selectedViolation.geometries.length > 0 && (
-              <div style={{ fontSize: 10, color: "#e94560", marginTop: 4, fontWeight: 600 }}>
-                Marker {selectedMarkerIndex + 1} of {selectedViolation.geometries.length}
-              </div>
-            )}
+            {selectedMarkerIndex != null && selectedViolation.geometries.length > 0 && (() => {
+              const geom = selectedViolation.geometries[selectedMarkerIndex];
+              const bbox = geom?.bbox ?? selectedViolation.bbox;
+              const cx = ((bbox[0] + bbox[2]) / 2);
+              const cy = ((bbox[1] + bbox[3]) / 2);
+              return (
+                <>
+                  <div style={{ fontSize: 10, color: "#e94560", marginTop: 4, fontWeight: 600 }}>
+                    Marker {selectedMarkerIndex + 1} of {selectedViolation.geometries.length}
+                  </div>
+                  <div style={{ fontSize: 10, color: "#00cccc", marginTop: 2, fontFamily: "monospace" }}>
+                    ({cx.toFixed(2)}, {cy.toFixed(2)}) µm
+                  </div>
+                  {geom?.edge_pair && (
+                    <div style={{ fontSize: 9, color: "#666", marginTop: 2 }}>
+                      Edge pair: {geom.type}
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>

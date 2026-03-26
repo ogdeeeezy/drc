@@ -237,7 +237,8 @@ export class WebGLRenderer {
     const gl = this.gl;
 
     for (let i = 0; i < geometries.length; i++) {
-      const [xmin, ymin, xmax, ymax] = geometries[i].bbox;
+      const geom = geometries[i];
+      const [xmin, ymin, xmax, ymax] = geom.bbox;
       // Two triangles forming a filled rectangle
       const vertices = new Float32Array([
         xmin, ymin, xmax, ymin, xmax, ymax,
@@ -254,7 +255,43 @@ export class WebGLRenderer {
           : [233 / 255, 69 / 255, 96 / 255, 0.25];
 
       this.markerBuffers.push({ vertexBuffer: buffer, vertexCount: 6, color });
+
+      // Render edge pairs as bright cyan lines (thin quads)
+      if (geom.edge_pair && (i === selectedIdx || selectedIdx === null)) {
+        const lineWidth = Math.max(0.02, (xmax - xmin + ymax - ymin) * 0.02);
+        for (const edge of [geom.edge_pair.edge1, geom.edge_pair.edge2]) {
+          if (edge.length >= 2) {
+            const edgeVerts = this.edgeToQuad(edge, lineWidth);
+            if (edgeVerts) {
+              const edgeBuf = gl.createBuffer()!;
+              gl.bindBuffer(gl.ARRAY_BUFFER, edgeBuf);
+              gl.bufferData(gl.ARRAY_BUFFER, edgeVerts, gl.STATIC_DRAW);
+              const edgeColor: [number, number, number, number] =
+                i === selectedIdx ? [0, 1, 1, 0.9] : [0, 1, 1, 0.4];
+              this.markerBuffers.push({ vertexBuffer: edgeBuf, vertexCount: edgeVerts.length / 2, color: edgeColor });
+            }
+          }
+        }
+      }
     }
+  }
+
+  /** Convert edge points to a thin quad (2 triangles) for rendering as a visible line. */
+  private edgeToQuad(edge: number[][], halfWidth: number): Float32Array | null {
+    if (edge.length < 2) return null;
+    const [x1, y1] = edge[0];
+    const [x2, y2] = edge[edge.length - 1];
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < 1e-9) return null;
+    // Perpendicular normal
+    const nx = (-dy / len) * halfWidth;
+    const ny = (dx / len) * halfWidth;
+    return new Float32Array([
+      x1 + nx, y1 + ny, x2 + nx, y2 + ny, x2 - nx, y2 - ny,
+      x1 + nx, y1 + ny, x2 - nx, y2 - ny, x1 - nx, y1 - ny,
+    ]);
   }
 
   clearMarkers() {
@@ -306,6 +343,19 @@ export class WebGLRenderer {
       x: this.camera.x + sx / this.camera.zoom,
       y: this.camera.y + sy / this.camera.zoom,
     };
+  }
+
+  /** Convert layout world coordinates to screen pixel coordinates. */
+  worldToScreen(wx: number, wy: number): { x: number; y: number } {
+    return {
+      x: (wx - this.camera.x) * this.camera.zoom,
+      y: (wy - this.camera.y) * this.camera.zoom,
+    };
+  }
+
+  /** Get canvas dimensions. */
+  getSize(): { width: number; height: number } {
+    return { width: this.width, height: this.height };
   }
 
   destroy() {

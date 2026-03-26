@@ -1,0 +1,22 @@
+{
+  "pcell_id": "e3ab1e3af8a6",
+  "pdk": "sky130",
+  "device_type": "poly_resistor",
+  "params": {
+    "w_um": 0.35000000000000003,
+    "l_um": 2.0,
+    "segments": 2,
+    "head_contact": true,
+    "tail_contact": true
+  },
+  "cell_name": "sky130_polyres_W0p35_L2_S2",
+  "drc_clean": true,
+  "violation_count": 0,
+  "violations": [],
+  "metadata": {
+    "total_resistance_length_um": 4.0,
+    "segments": 2,
+    "segment_length_um": 2.0
+  },
+  "gds_filename": "sky130_polyres_W0p35_L2_S2.gds"
+}

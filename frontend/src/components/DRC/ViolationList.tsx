@@ -138,9 +138,22 @@ export function ViolationList({ violations, selected, onSelect, selectedMarkerIn
                 >
                   Prev
                 </button>
-                <span style={{ fontSize: 11, color: "#999" }}>
-                  Marker {(selectedMarkerIndex ?? 0) + 1} of {v.geometries.length}
-                </span>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: 11, color: "#999" }}>
+                    Marker {(selectedMarkerIndex ?? 0) + 1} of {v.geometries.length}
+                  </div>
+                  {(() => {
+                    const geom = v.geometries[selectedMarkerIndex ?? 0];
+                    if (!geom) return null;
+                    const cx = (geom.bbox[0] + geom.bbox[2]) / 2;
+                    const cy = (geom.bbox[1] + geom.bbox[3]) / 2;
+                    return (
+                      <div style={{ fontSize: 9, color: "#00cccc", fontFamily: "monospace", marginTop: 2 }}>
+                        ({cx.toFixed(2)}, {cy.toFixed(2)}) µm
+                      </div>
+                    );
+                  })()}
+                </div>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

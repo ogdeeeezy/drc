@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import platform
+import resource
 import shutil
 import subprocess
 import tempfile
@@ -71,14 +73,42 @@ class DRCRunner:
             print(f"{violation.category}: {violation.violation_count} violations")
     """
 
+    # Memory limit for the KLayout subprocess (2 GB default).
+    # KLayout is a C++ process parsing untrusted GDS — cap memory to prevent bombs.
+    DRC_MAX_MEMORY_MB: int = 2048
+
     def __init__(
         self,
         klayout_binary: str = KLAYOUT_BINARY,
         timeout: int = DRC_TIMEOUT_SECONDS,
+        max_memory_mb: int = DRC_MAX_MEMORY_MB,
     ):
         self._binary = klayout_binary
         self._timeout = timeout
+        self._max_memory_mb = max_memory_mb
         self._parser = ViolationParser()
+
+    @staticmethod
+    def _make_preexec_fn(max_memory_mb: int):
+        """Return a preexec_fn that sets resource limits on the subprocess.
+
+        Called in the child process after fork, before exec. Sets RLIMIT_AS
+        (Linux) or RLIMIT_DATA (macOS) to cap memory, preventing memory bombs
+        from malicious GDS files.
+        """
+        def _set_limits():
+            max_bytes = max_memory_mb * 1024 * 1024
+            if platform.system() == "Linux":
+                try:
+                    resource.setrlimit(resource.RLIMIT_AS, (max_bytes, max_bytes))
+                except (ValueError, OSError):
+                    pass
+            else:
+                try:
+                    resource.setrlimit(resource.RLIMIT_DATA, (max_bytes, max_bytes))
+                except (ValueError, OSError):
+                    pass
+        return _set_limits
 
     @property
     def binary(self) -> str:
@@ -226,8 +256,6 @@ class DRCRunner:
         #   1. taskpolicy -b  — macOS background QoS (efficiency cores, lowest priority)
         #   2. nice -n 10     — scheduling priority fallback (works on all Unix)
         #   3. cpulimit -l N  — hard duty-cycle cap via SIGSTOP/SIGCONT
-        import platform
-
         if platform.system() == "Darwin" and shutil.which("taskpolicy"):
             cmd = ["taskpolicy", "-b"] + cmd
         cmd = ["nice", "-n", str(DRC_NICE_LEVEL)] + cmd
@@ -240,6 +268,7 @@ class DRCRunner:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                preexec_fn=self._make_preexec_fn(self._max_memory_mb),
             )
             logger.info("DRC started (pid %d, nice %d)", proc.pid, DRC_NICE_LEVEL)
 
@@ -366,8 +395,6 @@ class DRCRunner:
         cmd = self.build_command(gds_path, drc_deck_path, report_path, top_cell, strategy, pdk=pdk)
 
         # Throttle CPU with layered approach
-        import platform
-
         if platform.system() == "Darwin" and shutil.which("taskpolicy"):
             cmd = ["taskpolicy", "-b"] + cmd
         cmd = ["nice", "-n", str(DRC_NICE_LEVEL)] + cmd

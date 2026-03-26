@@ -51,11 +51,29 @@ class LayoutManager:
     def source_path(self) -> Path | None:
         return self._source_path
 
-    def load(self, gds_path: str | Path) -> None:
-        """Load a GDSII file."""
+    def load(self, gds_path: str | Path, *, sandbox: bool = True) -> None:
+        """Load a GDSII file.
+
+        Args:
+            gds_path: Path to the GDS file.
+            sandbox: If True (default), run a sandboxed pre-parse in a subprocess
+                     with resource limits before loading in-process. This catches
+                     malicious files (memory bombs, CPU exhaustion) without risking
+                     the main process. Set to False for trusted files or tests.
+        """
         path = Path(gds_path)
         if not path.exists():
             raise FileNotFoundError(f"GDSII file not found: {path}")
+
+        if sandbox:
+            from backend.core.sandbox import parse_gds_sandboxed
+
+            result = parse_gds_sandboxed(path)
+            if not result.success:
+                raise RuntimeError(
+                    f"GDS file failed sandboxed validation: {result.error}"
+                )
+
         self._library = gdstk.read_gds(str(path))
         self._source_path = path
 

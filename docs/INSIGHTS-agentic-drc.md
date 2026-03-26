@@ -95,3 +95,14 @@ Every canvas-based viewer needs viewport clamping from day one. The fix was triv
 
 ### New metal structures must update clearance references before dependent geometry
 Adding met1 bus bars between S/D pads and gate contact pads creates a new "closest metal" for m1.2 spacing. The bus top edge (`src_bus_top`) replaces `sd_met1_top` as the clearance reference for gate contact Y positioning. Computing bus positions AFTER gate contact placement would require a second pass to fix clearance — instead, compute bus Y positions immediately after S/D met1 bounds, then feed into gate contact clearance. **This extends the Session 12 insight ("compute dependent geometry in correct order"): any new structure inserted between existing layers must be computed before anything that depends on clearance to those layers.**
+
+## 2026-03-11 — Session 23: Marker Visualization + Parser Fix
+
+### KLayout .lyrdb uses inconsistent edge-pair separators
+KLayout uses `/` for some DRC rules and `|` for others as the separator between the two edges in edge-pair geometry values. No documentation about this — discovered by examining a real .lyrdb file where m1.2 used `/` (parsed correctly) but ct.2, psdm.1, MR_licon.SP.1 all used `|` (silently dropped). The fix was one character in a regex: `[/|]` instead of `/`. **Lesson: when a parser works on test fixtures but fails on real data, always examine the actual production output file. Test fixtures tend to be hand-written with a single format variation.**
+
+### React onWheel is passive — can't preventDefault
+In modern React (17+), `onWheel` event handlers are registered as passive listeners, meaning `e.preventDefault()` is silently ignored. For WebGL canvases that need to intercept scroll/pinch gestures, you must use native `canvas.addEventListener("wheel", handler, { passive: false })` via `useEffect`. Otherwise trackpad pinch fires both your zoom handler AND the browser's page zoom simultaneously, distorting the canvas. **Lesson: any canvas/WebGL component handling wheel events needs the native listener approach, not React's synthetic event.**
+
+### Sub-micron geometry needs minimum zoom bounds
+Edge-pair marker bboxes for DRC violations can be 0.03µm wide — zooming to 2x their size is still invisible. Adding a minimum zoom span (3µm) ensures markers are visible in context of surrounding geometry. **Lesson: when building zoom-to-selection in layout viewers, always enforce a minimum viewport size based on the smallest useful context, not the selection geometry itself.**

@@ -1,0 +1,28 @@
+{
+  "pcell_id": "5f5aa6553ad1",
+  "pdk": "sky130",
+  "device_type": "nmos",
+  "params": {
+    "device_type": "nmos",
+    "w_um": 0.5,
+    "l_um": 0.15,
+    "fingers": 2,
+    "gate_contact": "both"
+  },
+  "cell_name": "sky130_nmos_W0p5_L0p15_F2",
+  "drc_clean": true,
+  "violation_count": 0,
+  "violations": [
+    {
+      "category": "li.3",
+      "count": 0
+    }
+  ],
+  "metadata": {
+    "diff_width_um": 1.2,
+    "diff_height_um": 0.5,
+    "n_sd_contacts_y": 1,
+    "n_sd_regions": 3
+  },
+  "gds_filename": "sky130_nmos_W0p5_L0p15_F2.gds"
+}
