@@ -236,9 +236,23 @@ export class WebGLRenderer {
     this.clearMarkers();
     const gl = this.gl;
 
+    // Minimum marker size in world units — ensures markers are always visible
+    // even for sub-micron edge-pair violations. Scales with current view.
+    const viewW = this.width / this.camera.zoom;
+    const minMarkerSize = viewW * 0.03; // At least 3% of viewport width
+
     for (let i = 0; i < geometries.length; i++) {
       const geom = geometries[i];
-      const [xmin, ymin, xmax, ymax] = geom.bbox;
+      const [oxmin, oymin, oxmax, oymax] = geom.bbox;
+      // Expand tiny bboxes to minimum visible size
+      const cx = (oxmin + oxmax) / 2;
+      const cy = (oymin + oymax) / 2;
+      const halfW = Math.max((oxmax - oxmin) / 2, minMarkerSize / 2);
+      const halfH = Math.max((oymax - oymin) / 2, minMarkerSize / 2);
+      const xmin = cx - halfW;
+      const ymin = cy - halfH;
+      const xmax = cx + halfW;
+      const ymax = cy + halfH;
       // Two triangles forming a filled rectangle
       const vertices = new Float32Array([
         xmin, ymin, xmax, ymin, xmax, ymax,
@@ -258,7 +272,7 @@ export class WebGLRenderer {
 
       // Render edge pairs as bright cyan lines (thin quads)
       if (geom.edge_pair && (i === selectedIdx || selectedIdx === null)) {
-        const lineWidth = Math.max(0.02, (xmax - xmin + ymax - ymin) * 0.02);
+        const lineWidth = Math.max(minMarkerSize * 0.15, (xmax - xmin + ymax - ymin) * 0.04);
         for (const edge of [geom.edge_pair.edge1, geom.edge_pair.edge2]) {
           if (edge.length >= 2) {
             const edgeVerts = this.edgeToQuad(edge, lineWidth);
