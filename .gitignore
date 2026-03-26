@@ -15,3 +15,6 @@ node_modules/
 .env
 .coverage
 .agent/
+.DS_Store
+data/
+uv.lock
