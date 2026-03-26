@@ -1,6 +1,32 @@
 # PROGRESS-agentic-drc
 
-> Sessions 1-22 archived → `docs/archive/archive-progress-agentic-drc.md`
+> Sessions 1-23 archived → `docs/archive/archive-progress-agentic-drc.md`
+
+---
+
+## Session 25: 2026-03-25 — Production recovery + marker visualization UX
+
+### Done
+- **Production recovery** — Caddy was stopped, port 8000 hijacked by Agent Mixing. Fixed: DRC remapped to port 8001, Caddy restarted+enabled, Caddyfile updated.
+- **Firewall hardening** (`ufw`) — Port 443 locked to user IP + Cloudflare ranges. Investigated Cloudflare Tunnel (requires owned domain, deferred — DuckDNS can't be added to CF).
+- **Double-click zoom-in** (`5bbf1ab`) — Double-click now zooms 3x at cursor. Press R to reset view.
+- **Coordinate readout** (`5bbf1ab`) — Shows X/Y µm at cursor position (bottom-left overlay).
+- **Pulsing crosshair + marker coords** (`d606676`) — Cyan pulsing crosshair at selected marker center. Coordinates shown in overlay badge and sidebar.
+- **Edge pair rendering** (`d606676`) — Violating edges drawn as cyan lines on canvas.
+- **Minimum marker size** (`9e8345b`) — Marker rectangles expand to 3% of viewport width minimum. Sub-micron violations now visible.
+- **Sandbox memory fix** (`b0f2ef3`) — Increased from 512MB to 2GB. ESD GDS file was segfaulting gdstk.
+- **Gitignore cleanup** (`73f21d3`) — Removed .DS_Store, data/, uv.lock from tracking.
+
+### Decisions
+- DuckDNS stays (no domain purchase until DRC project has revenue)
+- DRC on port 8001 (Agent Mixing owns 8000 on VPS)
+- Cloudflare Tunnel deferred — requires owned domain zone
+
+### Next
+- Marker visualization may need further refinement (user testing edge pair rendering)
+- Wire KnowledgeBase.get_context() into LLM-assisted deck generation
+- Monte Carlo optimization
+- More PDKs (GF180, ASAP7)
 
 ---
 
@@ -25,39 +51,3 @@
 - Wire `KnowledgeBase.get_context()` into LLM-assisted deck generation pipeline
 - Monte Carlo optimization
 - More PDKs (GF180, ASAP7) — adding a PDK now means adding files, not code
-
----
-
-## Session 23: 2026-03-11 — Marker visualization shipped + parser fix + UX improvements
-
-### Done
-- **Marker visualization** (`d62e65b`) — WebGL red filled rectangles at each marker bbox. Selected marker bright (0.6 alpha), others dim (0.25 alpha). Per-marker zoom, Prev/Next navigation, "Marker N of M" display. 5 frontend files.
-- **Parser pipe separator fix** (`8dcf249`) — KLayout uses `|` (not just `/`) as edge-pair separator. ct.2, psdm.1, MR_licon.SP.1 went from 0 to correct marker counts. 29 total markers now parse from ESD .lyrdb.
-- **Minimum zoom span** (`7e89df2`) — Added 3µm floor so sub-micron edge-pair markers are visible in context. Fixed trackpad pinch distortion via non-passive wheel handler.
-- **Logo reset** (`f83133d`) — Clicking "Agentic DRC" resets all state and returns to upload screen.
-- **All deployed to production** — 4 deploys to VPS, all live at sky130drc.duckdns.org.
-
-### Decisions
-- MIN_ZOOM_SPAN = 3µm — balances seeing the marker vs surrounding context
-- Non-passive wheel listener via native `addEventListener` (React `onWheel` is passive, can't preventDefault)
-
-### Next
-- Monte Carlo optimization
-- LLM-assisted DRC deck generator
-- More PDKs (GF180, ASAP7)
-
----
-
-## Session 22: 2026-03-10 — DRC marker visualization diagnosis + plan
-
-### Done
-- **Diagnosed marker navigation bug** — User reported m1.2 violations (5 markers) show no errors at listed coordinates. Root cause: frontend zooms to combined bbox of all markers, no individual marker rectangles rendered on layout.
-- **Full coordinate chain traced** — DRC deck → .lyrdb edge-pair XML → violation_parser.py → API response → frontend. Data is correct; visualization is the gap.
-- **Implementation plan designed** — Plan at `~/.claude/plans/cryptic-snuggling-goose.md`.
-
-### Decisions
-- Markers rendered as filled rectangles in WebGL (not CSS overlay) so they pan/zoom with layout
-- Zoom to individual marker bbox (not combined), auto-select first marker on violation click
-
-### Next
-- Implement marker visualization plan (done in Session 23)
