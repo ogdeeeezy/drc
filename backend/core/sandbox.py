@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Defaults
 DEFAULT_TIMEOUT_SECONDS = 30
-DEFAULT_MAX_MEMORY_MB = 512
+DEFAULT_MAX_MEMORY_MB = 2048
 DEFAULT_MAX_CPU_SECONDS = 60
 
 
