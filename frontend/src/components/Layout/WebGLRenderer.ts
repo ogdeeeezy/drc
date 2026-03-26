@@ -232,8 +232,12 @@ export class WebGLRenderer {
     this.camera.y = ymin - (this.height / this.camera.zoom - h) / 2;
   }
 
+  /** Stored marker bboxes (expanded) for hit testing */
+  private markerHitBoxes: { xmin: number; ymin: number; xmax: number; ymax: number }[] = [];
+
   setMarkers(geometries: ViolationGeometry[], selectedIdx: number | null) {
     this.clearMarkers();
+    this.markerHitBoxes = [];
     const gl = this.gl;
 
     // Minimum marker size in world units — ensures markers are always visible
@@ -253,6 +257,9 @@ export class WebGLRenderer {
       const ymin = cy - halfH;
       const xmax = cx + halfW;
       const ymax = cy + halfH;
+
+      this.markerHitBoxes.push({ xmin, ymin, xmax, ymax });
+
       // Two triangles forming a filled rectangle
       const vertices = new Float32Array([
         xmin, ymin, xmax, ymin, xmax, ymax,
@@ -263,15 +270,19 @@ export class WebGLRenderer {
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
       gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
 
+      const isActive = i === selectedIdx;
+      const noneSelected = selectedIdx === null;
       const color: [number, number, number, number] =
-        i === selectedIdx
+        isActive
           ? [233 / 255, 69 / 255, 96 / 255, 0.6]
-          : [233 / 255, 69 / 255, 96 / 255, 0.25];
+          : noneSelected
+            ? [233 / 255, 69 / 255, 96 / 255, 0.4]  // all equally visible
+            : [233 / 255, 69 / 255, 96 / 255, 0.2];
 
       this.markerBuffers.push({ vertexBuffer: buffer, vertexCount: 6, color });
 
-      // Render edge pairs as bright cyan lines (thin quads)
-      if (geom.edge_pair && (i === selectedIdx || selectedIdx === null)) {
+      // Render edge pairs for ALL markers (dim for unselected, bright for selected)
+      if (geom.edge_pair) {
         const lineWidth = Math.max(minMarkerSize * 0.15, (xmax - xmin + ymax - ymin) * 0.04);
         for (const edge of [geom.edge_pair.edge1, geom.edge_pair.edge2]) {
           if (edge.length >= 2) {
@@ -281,13 +292,24 @@ export class WebGLRenderer {
               gl.bindBuffer(gl.ARRAY_BUFFER, edgeBuf);
               gl.bufferData(gl.ARRAY_BUFFER, edgeVerts, gl.STATIC_DRAW);
               const edgeColor: [number, number, number, number] =
-                i === selectedIdx ? [0, 1, 1, 0.9] : [0, 1, 1, 0.4];
+                isActive ? [0, 1, 1, 0.9] : noneSelected ? [0, 1, 1, 0.5] : [0, 1, 1, 0.3];
               this.markerBuffers.push({ vertexBuffer: edgeBuf, vertexCount: edgeVerts.length / 2, color: edgeColor });
             }
           }
         }
       }
     }
+  }
+
+  /** Hit-test: find which marker index contains the given world coordinate, or -1 */
+  hitTestMarker(wx: number, wy: number): number {
+    for (let i = 0; i < this.markerHitBoxes.length; i++) {
+      const b = this.markerHitBoxes[i];
+      if (wx >= b.xmin && wx <= b.xmax && wy >= b.ymin && wy <= b.ymax) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   /** Convert edge points to a thin quad (2 triangles) for rendering as a visible line. */

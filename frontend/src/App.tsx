@@ -160,7 +160,7 @@ export function App() {
 
   const handleSelectViolation = useCallback((v: Violation | null) => {
     setSelectedViolation(v);
-    setSelectedMarkerIndex(v ? 0 : null);
+    setSelectedMarkerIndex(null); // show all markers, none focused
   }, []);
 
   const handleReset = useCallback(() => {
@@ -329,6 +329,7 @@ export function App() {
                 hiddenLayers={hiddenLayers}
                 selectedViolation={selectedViolation}
                 selectedMarkerIndex={selectedMarkerIndex}
+                onMarkerClick={setSelectedMarkerIndex}
               />
               {violations && (
                 <ViolationOverlay
