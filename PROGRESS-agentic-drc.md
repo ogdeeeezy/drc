@@ -4,6 +4,20 @@
 
 ---
 
+## Session 26: 2026-03-28 — All-markers-at-once UX overhaul
+
+### Done
+- **All-markers view** (`3a24b8a`) — Replaced Prev/Next navigation with showing all markers simultaneously. Numbered circle labels on canvas, clickable marker list in sidebar, tooltip with rule/coords on selection.
+- **Canvas click-to-select** (`3a24b8a`) — Hit-test in WebGLRenderer lets users click markers directly on canvas. Edge pairs now render for all markers (dim cyan), not just selected.
+- **Deployed to production** — Rebuilt and deployed via Docker on VPS.
+
+### Next
+- Wire KnowledgeBase.get_context() into LLM-assisted deck generation
+- Monte Carlo optimization
+- More PDKs (GF180, ASAP7)
+
+---
+
 ## Session 25: 2026-03-25 — Production recovery + marker visualization UX
 
 ### Done

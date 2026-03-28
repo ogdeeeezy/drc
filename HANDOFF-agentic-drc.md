@@ -5,14 +5,13 @@ Open-source DRC tool — PVS alternative for semiconductor layout verification. 
 
 ## Current State
 - **Phases 1-5**: ALL COMPLETE (33/33 stories)
-- **762 unit tests passing**, 95% coverage, frontend builds clean
+- **772 unit tests passing**, 95% coverage, frontend builds clean
 - **GitHub**: https://github.com/ogdeeeezy/drc — all pushed to main
 - **DEPLOYED**: https://sky130drc.duckdns.org — live with auto-SSL via Caddy
-- **Marker visualization**: Pulsing cyan crosshair, edge pair lines, min-size markers, coordinate readout
+- **Marker visualization**: All markers shown at once with numbered labels, click-to-select on canvas, tooltips with rule/coords, edge pairs for all markers
 - **PDK knowledge layer**: 3-tier system (universal → taxonomy → PDK-specific) for LLM context
 
 ## Immediate Next
-- Marker visualization may need further UX refinement after user testing
 - Wire `KnowledgeBase.get_context()` into LLM-assisted deck generation pipeline
 - Monte Carlo optimization — klayout.db in-process for 10k+ geometric variants
 - More PDKs — GF180, ASAP7 (adding a PDK = adding files, not code)
@@ -21,7 +20,7 @@ Open-source DRC tool — PVS alternative for semiconductor layout verification. 
 - **Production**: https://sky130drc.duckdns.org
 - **Redeploy**: `ssh root@100.118.0.91 "cd /opt/drc && git pull && docker compose up -d --build"`
 - **Local dev**: `make run` (backend 8000) + `cd frontend && npx vite` (Vite 5173)
-- **Tests**: `.venv/bin/python -m pytest tests/unit/ -q --cov=backend` (762 tests, 95%)
+- **Tests**: `.venv/bin/python -m pytest tests/unit/ -q --cov=backend` (772 tests, 95%)
 
 ## VPS Details (ExtraVM)
 - **Tailscale**: `ssh root@100.118.0.91` (use this for SSH)
